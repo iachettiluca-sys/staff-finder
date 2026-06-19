@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Staff Finder</title>
+<script>
+  window.SUPABASE_URL = "SUPABASE_URL_PLACEHOLDER";
+  window.SUPABASE_ANON_KEY = "SUPABASE_ANON_KEY_PLACEHOLDER";
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1B2A3E;--accent:#3B7DD8;--bg:#F5F7FA;--card:#FFFFFF;
+  --border:#E2E8F0;--success:#22C55E;--warning:#F59E0B;--danger:#EF4444;
+  --muted:#64748B;--text:#1E293B;--radius:10px;
+}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* LOGIN */
+#loginView{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1rem}
+.loginCard{background:var(--card);border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.1);padding:2.5rem;width:100%;max-width:400px}
+.loginLogo{text-align:center;margin-bottom:2rem}
+.loginLogo h1{font-size:1.75rem;font-weight:700;color:var(--primary);letter-spacing:.05em}
+.loginLogo p{color:var(--muted);font-size:.9rem;margin-top:.25rem}
+.field{margin-bottom:1rem}
+.field label{display:block;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:.4rem;letter-spacing:.05em;text-transform:uppercase}
+.field input{width:100%;padding:.7rem 1rem;border:1.5px solid var(--border);border-radius:8px;font-size:.95rem;outline:none;transition:border-color .15s}
+.field input:focus{border-color:var(--accent)}
+.btnPrimary{width:100%;padding:.8rem;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:.95rem;font-weight:600;cursor:pointer;transition:opacity .15s}
+.btnPrimary:hover{opacity:.88}
+.btnPrimary:disabled{opacity:.5;cursor:not-allowed}
+.errMsg{margin-top:.75rem;color:var(--danger);font-size:.85rem;text-align:center;min-height:1.2em}
+
+/* MAIN */
+#mainView{display:none;flex-direction:column;min-height:100vh}
+.navbar{background:var(--primary);padding:.85rem 1.5rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.navLogo{font-size:1.1rem;font-weight:700;color:#fff;letter-spacing:.08em}
+.navSearch{font-size:.85rem;color:rgba(255,255,255,.7)}
+.navRight{display:flex;align-items:center;gap:.75rem}
+.navUser{font-size:.8rem;color:rgba(255,255,255,.7)}
+.btnGhost{background:transparent;border:1.5px solid rgba(255,255,255,.35);color:rgba(255,255,255,.85);padding:.35rem .85rem;border-radius:6px;cursor:pointer;font-size:.82rem;transition:background .15s}
+.btnGhost:hover{background:rgba(255,255,255,.1)}
+
+.filtersBar{background:var(--card);border-bottom:1px solid var(--border);padding:.75rem 1.5rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+.filtersBar select,.filtersBar input[type=text]{padding:.4rem .7rem;border:1.5px solid var(--border);border-radius:6px;font-size:.82rem;outline:none;background:var(--bg);color:var(--text)}
+.filtersBar select:focus,.filtersBar input:focus{border-color:var(--accent)}
+.sliderWrap{display:flex;align-items:center;gap:.4rem;font-size:.82rem;color:var(--muted)}
+.sliderWrap input[type=range]{width:90px;accent-color:var(--accent)}
+.btnReload{padding:.4rem .85rem;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:.82rem;cursor:pointer;transition:opacity .15s;display:flex;align-items:center;gap:.3rem}
+.btnReload:hover{opacity:.88}
+.btnReload:disabled{opacity:.5;cursor:not-allowed}
+
+.statsStrip{background:var(--card);border-bottom:1px solid var(--border);padding:.5rem 1.5rem;display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
+.statItem{display:flex;align-items:center;gap:.3rem}
+.statItem strong{color:var(--text)}
+.statDot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+.gridWrap{flex:1;padding:1.5rem;overflow-y:auto}
+.candidatesGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+@media(max-width:900px){.candidatesGrid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.candidatesGrid{grid-template-columns:1fr}}
+
+.cCard{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);padding:1.15rem;display:flex;flex-direction:column;gap:.6rem;position:relative;transition:box-shadow .15s}
+.cCard:hover{box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.cCard.descartado{opacity:.55}
+.cCard.descartado::after{content:"DESCARTADO";position:absolute;top:.6rem;right:.6rem;font-size:.65rem;font-weight:700;letter-spacing:.08em;color:var(--danger);background:#FEF2F2;padding:.2rem .5rem;border-radius:4px;border:1px solid var(--danger)}
+.cardTop{display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem}
+.avatarWrap{display:flex;align-items:center;gap:.6rem;min-width:0}
+.avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:700;color:#fff;flex-shrink:0}
+.candidateName{font-size:.95rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scoreBadge{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;color:#fff;flex-shrink:0}
+.badgesRow{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:.25rem;font-size:.72rem;font-weight:600;padding:.2rem .55rem;border-radius:20px;white-space:nowrap}
+.badge-chef{background:#DBEAFE;color:#1D4ED8}
+.badge-host{background:#CCFBF1;color:#0D9488}
+.badge-hostess{background:#EDE9FE;color:#7C3AED}
+.badge-unknown{background:#F1F5F9;color:var(--muted)}
+.badge-couple{background:#FEF3C7;color:#B45309}
+.badge-nuevo{background:#F1F5F9;color:#64748B}
+.badge-revisado{background:#DBEAFE;color:#1D4ED8}
+.badge-preseleccionado{background:#EDE9FE;color:#7C3AED}
+.badge-entrevista{background:#FEF3C7;color:#B45309}
+.badge-contratado{background:#DCFCE7;color:#15803D}
+.badge-descartado{background:#FEF2F2;color:#B91C1C}
+.cardSummary{font-size:.82rem;color:var(--muted);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.btnVerPerfil{margin-top:.2rem;padding:.45rem .9rem;background:var(--primary);color:#fff;border:none;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer;align-self:flex-start;transition:opacity .15s}
+.btnVerPerfil:hover{opacity:.84}
+
+.skeleton{background:#E2E8F0;border-radius:6px;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.skCard{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);padding:1.15rem;display:flex;flex-direction:column;gap:.75rem}
+.emptyState{grid-column:1/-1;text-align:center;padding:4rem 1rem;color:var(--muted)}
+.emptyState .ei{font-size:2.5rem;margin-bottom:.75rem}
+.emptyState h3{font-size:1.1rem;color:var(--text);margin-bottom:.35rem}
+
+#backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:100}
+#detailPanel{display:none;position:fixed;top:0;right:0;height:100vh;width:480px;max-width:100vw;background:var(--card);box-shadow:-4px 0 32px rgba(0,0,0,.12);z-index:101;overflow-y:auto;flex-direction:column}
+#detailPanel.open{display:flex}
+#backdrop.open{display:block}
+.panelHeader{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;position:sticky;top:0;background:var(--card);z-index:1}
+.phLeft{display:flex;flex-direction:column;gap:.4rem}
+.panelHeader h2{font-size:1.15rem;font-weight:700;color:var(--text)}
+.panelClose{background:none;border:none;cursor:pointer;padding:.25rem;color:var(--muted);font-size:1.3rem;line-height:1;border-radius:4px}
+.panelClose:hover{background:var(--bg)}
+.panelSection{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border)}
+.panelSection:last-child{border-bottom:none}
+.sectionLabel{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.85rem}
+.scoreRow{display:flex;align-items:center;gap:1rem;margin-bottom:.75rem}
+.scoreBig{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:800;color:#fff;flex-shrink:0}
+.scoreSummary{font-size:.88rem;color:var(--muted);line-height:1.5}
+.chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem}
+.chip{font-size:.75rem;padding:.25rem .65rem;border-radius:20px;font-weight:500}
+.chip-strength{background:#DCFCE7;color:#15803D}
+.chip-gap{background:#FEF2F2;color:#B91C1C}
+.bioText{font-size:.85rem;color:var(--muted);line-height:1.6;max-height:120px;overflow:hidden;transition:max-height .3s;white-space:pre-wrap}
+.bioText.expanded{max-height:600px}
+.bioToggle{background:none;border:none;color:var(--accent);font-size:.8rem;cursor:pointer;margin-top:.4rem;padding:0}
+.btnCV{display:inline-flex;align-items:center;gap:.4rem;padding:.55rem 1rem;background:var(--accent);color:#fff;border:none;border-radius:7px;font-size:.85rem;font-weight:600;cursor:pointer;text-decoration:none;transition:opacity .15s}
+.btnCV:hover{opacity:.88}
+.noCv{font-size:.85rem;color:var(--muted);font-style:italic}
+.coupleLink{display:inline-flex;align-items:center;gap:.4rem;font-size:.9rem;color:var(--accent);cursor:pointer;text-decoration:underline}
+.statusSelect{width:100%;padding:.55rem .8rem;border:1.5px solid var(--border);border-radius:7px;font-size:.88rem;outline:none;cursor:pointer}
+.statusSelect:focus{border-color:var(--accent)}
+.statusSaved{font-size:.8rem;color:var(--success);margin-top:.4rem;min-height:1.1em}
+.noteItem{padding:.65rem 0;border-bottom:1px solid var(--border)}
+.noteItem:last-child{border-bottom:none}
+.noteMeta{font-size:.75rem;color:var(--muted);margin-bottom:.2rem}
+.noteText{font-size:.85rem;color:var(--text);line-height:1.5}
+.noNotes{font-size:.85rem;color:var(--muted);font-style:italic}
+.btnAddNote{display:flex;align-items:center;gap:.3rem;margin-top:.75rem;padding:.45rem .85rem;border:1.5px solid var(--border);background:var(--bg);color:var(--text);border-radius:6px;font-size:.82rem;cursor:pointer;transition:background .15s}
+.btnAddNote:hover{background:var(--border)}
+.noteForm{margin-top:.75rem;display:flex;flex-direction:column;gap:.5rem}
+.noteForm textarea{width:100%;padding:.6rem .8rem;border:1.5px solid var(--border);border-radius:7px;font-size:.85rem;resize:vertical;min-height:80px;outline:none;font-family:inherit}
+.noteForm textarea:focus{border-color:var(--accent)}
+.noteFormBtns{display:flex;gap:.5rem}
+.btnSaveNote{padding:.45rem .9rem;background:var(--primary);color:#fff;border:none;border-radius:6px;font-size:.82rem;font-weight:600;cursor:pointer}
+.btnCancelNote{padding:.45rem .9rem;background:transparent;border:1.5px solid var(--border);border-radius:6px;font-size:.82rem;cursor:pointer}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginView">
+  <div class="loginCard">
+    <div class="loginLogo">
+      <h1>STAFF FINDER</h1>
+      <p>Gestion de candidatos</p>
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="tu@email.com" autocomplete="email">
+    </div>
+    <div class="field">
+      <label>Contrasena</label>
+      <input type="password" id="loginPass" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password">
+    </div>
+    <button class="btnPrimary" id="btnLogin">Ingresar</button>
+    <div class="errMsg" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="mainView">
+  <nav class="navbar">
+    <span class="navLogo">STAFF FINDER</span>
+    <span class="navSearch" id="navSearchName"></span>
+    <div class="navRight">
+      <span class="navUser" id="navUser"></span>
+      <button class="btnGhost" id="btnLogout">Salir</button>
+    </div>
+  </nav>
+
+  <div class="filtersBar">
+    <select id="fSearch"></select>
+    <select id="fPosition">
+      <option value="">Todos los puestos</option>
+      <option value="chef">Chef</option>
+      <option value="host">Host</option>
+      <option value="hostess">Hostess</option>
+      <option value="unknown">Desconocido</option>
+    </select>
+    <select id="fCategory">
+      <option value="">Todas</option>
+      <option value="solo">Solo</option>
+      <option value="couple">Pareja</option>
+    </select>
+    <select id="fStatus">
+      <option value="">Todos los estados</option>
+      <option value="nuevo">Nuevo</option>
+      <option value="revisado">Revisado</option>
+      <option value="preseleccionado">Preseleccionado</option>
+      <option value="entrevista">Entrevista</option>
+      <option value="contratado">Contratado</option>
+      <option value="descartado">Descartado</option>
+    </select>
+    <div class="sliderWrap">
+      <span>Score min:</span>
+      <input type="range" id="fScore" min="0" max="100" value="0">
+      <span id="fScoreVal">0</span>
+    </div>
+    <input type="text" id="fName" placeholder="Buscar por nombre..." style="min-width:160px">
+    <button class="btnReload" id="btnReload">&#8635; Actualizar</button>
+  </div>
+
+  <div class="statsStrip" id="statsStrip"></div>
+
+  <div class="gridWrap">
+    <div class="candidatesGrid" id="grid"></div>
+  </div>
+</div>
+
+<!-- Backdrop -->
+<div id="backdrop"></div>
+
+<!-- Detail Panel -->
+<div id="detailPanel">
+  <div class="panelHeader">
+    <div class="phLeft">
+      <h2 id="dpName">-</h2>
+      <div class="badgesRow" id="dpBadges"></div>
+    </div>
+    <button class="panelClose" id="panelClose">&#10005;</button>
+  </div>
+
+  <div class="panelSection">
+    <div class="sectionLabel">Analisis IA</div>
+    <div class="scoreRow">
+      <div class="scoreBig" id="dpScoreBig">-</div>
+      <div class="scoreSummary" id="dpSummary"></div>
+    </div>
+    <div class="chips" id="dpStrengths"></div>
+    <div class="chips" id="dpGaps"></div>
+  </div>
+
+  <div class="panelSection">
+    <div class="sectionLabel">Bio (del email)</div>
+    <div class="bioText" id="dpBio"></div>
+    <button class="bioToggle" id="bioToggle">Ver mas</button>
+  </div>
+
+  <div class="panelSection">
+    <div class="sectionLabel">Curriculum Vitae</div>
+    <div id="dpCV"></div>
+  </div>
+
+  <div class="panelSection" id="dpCoupleSection" style="display:none">
+    <div class="sectionLabel">Pareja / Candidato vinculado</div>
+    <div id="dpCoupleContent"></div>
+  </div>
+
+  <div class="panelSection">
+    <div class="sectionLabel">Estado</div>
+    <select class="statusSelect" id="dpStatus">
+      <option value="nuevo">Nuevo</option>
+      <option value="revisado">Revisado</option>
+      <option value="preseleccionado">Preseleccionado</option>
+      <option value="entrevista">Entrevista</option>
+      <option value="contratado">Contratado</option>
+      <option value="descartado">Descartado</option>
+    </select>
+    <div class="statusSaved" id="statusSaved"></div>
+  </div>
+
+  <div class="panelSection">
+    <div class="sectionLabel">Notas del equipo</div>
+    <div id="dpNotesList"></div>
+    <button class="btnAddNote" id="btnAddNote">+ Agregar nota</button>
+    <div class="noteForm" id="noteForm" style="display:none">
+      <textarea id="noteInput" placeholder="Escribi una nota sobre este candidato..."></textarea>
+      <div class="noteFormBtns">
+        <button class="btnSaveNote" id="btnSaveNote">Guardar</button>
+        <button class="btnCancelNote" id="btnCancelNote">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var supabaseClient = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+var currentUser = null;
+var allCandidates = [];
+var searches = [];
+var currentSearchId = null;
+var currentCandidate = null;
+
+function initials(name) {
+  return (name || '?').split(' ').slice(0,2).map(function(p){ return p[0] || ''; }).join('').toUpperCase() || '?';
+}
+function avatarColor(pos) {
+  var m = {chef:'#1D4ED8', host:'#0D9488', hostess:'#7C3AED'};
+  return m[pos] || '#64748B';
+}
+function scoreColor(s) {
+  if (s === null || s === undefined) return '#94A3B8';
+  return s >= 75 ? '#22C55E' : s >= 50 ? '#F59E0B' : '#EF4444';
+}
+function posLabel(p) {
+  var m = {chef:'Chef', host:'Host', hostess:'Hostess', unknown:'?'};
+  return m[p] || (p || '?');
+}
+function statusLabel(s) {
+  var m = {nuevo:'Nuevo', revisado:'Revisado', preseleccionado:'Preseleccionado',
+    entrevista:'Entrevista', contratado:'Contratado', descartado:'Descartado'};
+  return m[s] || s;
+}
+function fmtDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('es-AR', {day:'2-digit', month:'short', year:'numeric'});
+}
+
+// AUTH
+document.getElementById('btnLogin').addEventListener('click', async function() {
+  var email = document.getElementById('loginEmail').value.trim();
+  var pass  = document.getElementById('loginPass').value;
+  var errEl = document.getElementById('loginErr');
+  var btn   = document.getElementById('btnLogin');
+  errEl.textContent = '';
+  btn.disabled = true; btn.textContent = 'Ingresando...';
+  var result = await supabaseClient.auth.signInWithPassword({ email: email, password: pass });
+  btn.disabled = false; btn.textContent = 'Ingresar';
+  if (result.error) { errEl.textContent = 'Email o contrasena incorrectos.'; return; }
+  currentUser = result.data.user;
+  showApp();
+});
+
+document.getElementById('loginEmail').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('btnLogin').click(); });
+document.getElementById('loginPass').addEventListener('keydown',  function(e){ if(e.key==='Enter') document.getElementById('btnLogin').click(); });
+
+document.getElementById('btnLogout').addEventListener('click', async function() {
+  await supabaseClient.auth.signOut(); location.reload();
+});
+
+(async function() {
+  var result = await supabaseClient.auth.getSession();
+  if (result.data && result.data.session) {
+    currentUser = result.data.session.user;
+    showApp();
+  }
+})();
+
+async function showApp() {
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('mainView').style.display  = 'flex';
+  document.getElementById('navUser').textContent = (currentUser && currentUser.email) || '';
+  await loadSearches();
+}
+
+async function loadSearches() {
+  var result = await supabaseClient.from('searches').select('*').eq('is_active', true).order('created_at', {ascending: false});
+  var data = result.data;
+  if (!data || !data.length) { showGrid([]); return; }
+  searches = data;
+  var sel = document.getElementById('fSearch');
+  sel.innerHTML = data.map(function(s){ return '<option value="' + s.id + '">' + s.name + '</option>'; }).join('');
+  currentSearchId = data[0].id;
+  document.getElementById('navSearchName').textContent = data[0].name;
+  sel.addEventListener('change', function() {
+    currentSearchId = sel.value;
+    var s = searches.find(function(x){ return x.id === sel.value; });
+    document.getElementById('navSearchName').textContent = (s && s.name) || '';
+    loadCandidates();
+  });
+  loadCandidates();
+}
+
+async function loadCandidates() {
+  var btn = document.getElementById('btnReload');
+  btn.disabled = true; btn.textContent = 'Cargando...';
+  showSkeletons();
+  var result = await supabaseClient.from('candidates')
+    .select('*, notes(*)')
+    .eq('search_id', currentSearchId)
+    .order('ai_score', {ascending: false, nullsFirst: false});
+  btn.disabled = false; btn.textContent = '↻ Actualizar';
+  if (result.error) { showGrid([]); return; }
+  var data = result.data || [];
+  var active = data.filter(function(c){ return c.status !== 'descartado'; });
+  var disc   = data.filter(function(c){ return c.status === 'descartado'; });
+  allCandidates = active.concat(disc);
+  applyFilters();
+}
+
+document.getElementById('btnReload').addEventListener('click', loadCandidates);
+
+['fPosition','fCategory','fStatus','fName'].forEach(function(id) {
+  document.getElementById(id).addEventListener('input', applyFilters);
+});
+document.getElementById('fScore').addEventListener('input', function(e) {
+  document.getElementById('fScoreVal').textContent = e.target.value;
+  applyFilters();
+});
+
+function applyFilters() {
+  var pos   = document.getElementById('fPosition').value;
+  var cat   = document.getElementById('fCategory').value;
+  var sta   = document.getElementById('fStatus').value;
+  var minSc = parseInt(document.getElementById('fScore').value || '0');
+  var nameQ = document.getElementById('fName').value.toLowerCase();
+  var filtered = allCandidates.filter(function(c) {
+    if (pos && c.position !== pos) return false;
+    if (cat && c.category !== cat) return false;
+    if (sta && c.status !== sta)   return false;
+    if (c.ai_score !== null && c.ai_score !== undefined && c.ai_score < minSc) return false;
+    if (nameQ && c.name.toLowerCase().indexOf(nameQ) === -1) return false;
+    return true;
+  });
+  updateStats(filtered);
+  showGrid(filtered);
+}
+
+function updateStats(candidates) {
+  var total  = candidates.length;
+  var scores = candidates.filter(function(c){ return c.ai_score !== null && c.ai_score !== undefined; }).map(function(c){ return c.ai_score; });
+  var avg    = scores.length ? Math.round(scores.reduce(function(a,b){ return a+b; }, 0) / scores.length) : '-';
+  var counts = {};
+  candidates.forEach(function(c){ counts[c.status] = (counts[c.status] || 0) + 1; });
+  var statColors = {nuevo:'#94A3B8', revisado:'#3B82F6', preseleccionado:'#8B5CF6',
+    entrevista:'#F59E0B', contratado:'#22C55E', descartado:'#EF4444'};
+  var html = '<div class="statItem"><strong>' + total + '</strong> candidatos</div>';
+  if (scores.length) html += '<div class="statItem">Score prom: <strong>' + avg + '</strong></div>';
+  Object.keys(counts).forEach(function(s) {
+    var dot = '<span class="statDot" style="background:' + (statColors[s] || '#ccc') + '"></span>';
+    html += '<div class="statItem">' + dot + statusLabel(s) + ': <strong>' + counts[s] + '</strong></div>';
+  });
+  document.getElementById('statsStrip').innerHTML = html;
+}
+
+function showSkeletons() {
+  document.getElementById('grid').innerHTML = [1,2,3,4,5,6].map(function() {
+    return '<div class="skCard">' +
+      '<div class="skeleton" style="height:40px;width:40%;border-radius:6px"></div>' +
+      '<div class="skeleton" style="height:14px;border-radius:4px"></div>' +
+      '<div class="skeleton" style="height:14px;width:60%;border-radius:4px"></div>' +
+      '<div class="skeleton" style="height:32px;border-radius:6px;margin-top:.5rem"></div>' +
+      '</div>';
+  }).join('');
+}
+
+function showGrid(candidates) {
+  var grid = document.getElementById('grid');
+  if (!candidates.length) {
+    grid.innerHTML = '<div class="emptyState"><div class="ei">&#128269;</div><h3>Sin resultados</h3><p>Proba cambiando los filtros.</p></div>';
+    return;
+  }
+  grid.innerHTML = candidates.map(cardHTML).join('');
+  grid.querySelectorAll('.btnVerPerfil').forEach(function(btn) {
+    btn.addEventListener('click', function(){ openDetail(btn.dataset.id); });
+  });
+}
+
+function cardHTML(c) {
+  var sn = (c.ai_score !== null && c.ai_score !== undefined) ? c.ai_score : null;
+  var isDisc = c.status === 'descartado';
+  var coupleTag = c.category === 'couple' ? '<span class="badge badge-couple">&#8651; Pareja</span>' : '';
+  var summary = c.ai_summary ? '<div class="cardSummary">' + c.ai_summary + '</div>' : '';
+  return '<div class="cCard' + (isDisc ? ' descartado' : '') + '" data-id="' + c.id + '">' +
+    '<div class="cardTop">' +
+      '<div class="avatarWrap">' +
+        '<div class="avatar" style="background:' + avatarColor(c.position) + '">' + initials(c.name) + '</div>' +
+        '<span class="candidateName">' + c.name + '</span>' +
+      '</div>' +
+      '<div class="scoreBadge" style="background:' + scoreColor(sn) + '">' + (sn !== null ? sn : '-') + '</div>' +
+    '</div>' +
+    '<div class="badgesRow">' +
+      '<span class="badge badge-' + (c.position || 'unknown') + '">' + posLabel(c.position) + '</span>' +
+      coupleTag +
+      '<span class="badge badge-' + (c.status || 'nuevo') + '">' + statusLabel(c.status) + '</span>' +
+    '</div>' +
+    summary +
+    '<button class="btnVerPerfil" data-id="' + c.id + '">Ver perfil</button>' +
+  '</div>';
+}
+
+async function openDetail(id) {
+  var c = allCandidates.find(function(x){ return x.id === id; });
+  if (!c) return;
+  currentCandidate = c;
+
+  document.getElementById('dpName').textContent = c.name;
+
+  var sn = (c.ai_score !== null && c.ai_score !== undefined) ? c.ai_score : null;
+  var sb2 = document.getElementById('dpScoreBig');
+  sb2.textContent = sn !== null ? sn : '-';
+  sb2.style.background = scoreColor(sn);
+  document.getElementById('dpSummary').textContent = c.ai_summary || 'Sin analisis disponible.';
+
+  var coupleTag = c.category === 'couple' ? '<span class="badge badge-couple">&#8651; Pareja</span>' : '';
+  document.getElementById('dpBadges').innerHTML =
+    '<span class="badge badge-' + (c.position||'unknown') + '">' + posLabel(c.position) + '</span>' +
+    coupleTag +
+    '<span class="badge badge-' + (c.status||'nuevo') + '">' + statusLabel(c.status) + '</span>';
+
+  var strengths = Array.isArray(c.ai_strengths) ? c.ai_strengths : (c.ai_strengths ? JSON.parse(c.ai_strengths) : []);
+  var gaps      = Array.isArray(c.ai_gaps)      ? c.ai_gaps      : (c.ai_gaps      ? JSON.parse(c.ai_gaps)      : []);
+  document.getElementById('dpStrengths').innerHTML = strengths.map(function(s){ return '<span class="chip chip-strength">&#10003; ' + s + '</span>'; }).join('');
+  document.getElementById('dpGaps').innerHTML      = gaps.map(function(g){      return '<span class="chip chip-gap">&#10007; ' + g + '</span>'; }).join('');
+
+  var bioEl = document.getElementById('dpBio');
+  bioEl.textContent = c.bio || 'Sin bio disponible.';
+  bioEl.classList.remove('expanded');
+  document.getElementById('bioToggle').textContent = 'Ver mas';
+
+  document.getElementById('dpCV').innerHTML = c.pdf_url
+    ? '<a class="btnCV" href="' + c.pdf_url + '" target="_blank" rel="noopener">&#8599; Ver CV</a>'
+    : '<span class="noCv">CV no disponible</span>';
+
+  var coupleSection = document.getElementById('dpCoupleSection');
+  var coupleContent = document.getElementById('dpCoupleContent');
+  if (c.category === 'couple' && c.couple_partner_id) {
+    coupleSection.style.display = '';
+    var partner = allCandidates.find(function(x){ return x.id === c.couple_partner_id; });
+    var pname = (partner && partner.name) || 'Ver pareja';
+    coupleContent.innerHTML = '<span class="coupleLink">&#8651; ' + pname + '</span>';
+    coupleContent.querySelector('.coupleLink').addEventListener('click', function(){ openDetail(c.couple_partner_id); });
+  } else {
+    coupleSection.style.display = 'none';
+  }
+
+  document.getElementById('dpStatus').value = c.status || 'nuevo';
+  document.getElementById('statusSaved').textContent = '';
+
+  renderNotes(c.notes || []);
+  document.getElementById('noteForm').style.display = 'none';
+  document.getElementById('noteInput').value = '';
+
+  document.getElementById('detailPanel').classList.add('open');
+  document.getElementById('backdrop').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('open');
+  document.getElementById('backdrop').classList.remove('open');
+  currentCandidate = null;
+}
+document.getElementById('panelClose').addEventListener('click', closeDetail);
+document.getElementById('backdrop').addEventListener('click', closeDetail);
+
+document.getElementById('bioToggle').addEventListener('click', function() {
+  var el = document.getElementById('dpBio');
+  var exp = el.classList.toggle('expanded');
+  document.getElementById('bioToggle').textContent = exp ? 'Ver menos' : 'Ver mas';
+});
+
+document.getElementById('dpStatus').addEventListener('change', async function(e) {
+  if (!currentCandidate) return;
+  var ns = e.target.value;
+  var saved = document.getElementById('statusSaved');
+  saved.textContent = 'Guardando...'; saved.style.color = 'var(--muted)';
+  var result = await supabaseClient.from('candidates').update({status: ns}).eq('id', currentCandidate.id);
+  if (result.error) { saved.textContent = 'Error.'; saved.style.color = 'var(--danger)'; return; }
+  saved.textContent = 'Guardado &#10003;'; saved.style.color = 'var(--success)';
+  currentCandidate.status = ns;
+  var idx = allCandidates.findIndex(function(x){ return x.id === currentCandidate.id; });
+  if (idx !== -1) { allCandidates[idx].status = ns; applyFilters(); }
+  setTimeout(function(){ saved.textContent = ''; }, 2000);
+});
+
+function renderNotes(notes) {
+  var el = document.getElementById('dpNotesList');
+  if (!notes.length) { el.innerHTML = '<div class="noNotes">Sin notas aun.</div>'; return; }
+  var sorted = notes.slice().sort(function(a,b){ return new Date(b.created_at) - new Date(a.created_at); });
+  el.innerHTML = sorted.map(function(n) {
+    return '<div class="noteItem">' +
+      '<div class="noteMeta">' + (n.author_email || 'Equipo') + ' &middot; ' + fmtDate(n.created_at) + '</div>' +
+      '<div class="noteText">' + n.text + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+document.getElementById('btnAddNote').addEventListener('click', function() {
+  document.getElementById('noteForm').style.display = 'flex';
+  document.getElementById('noteInput').focus();
+});
+document.getElementById('btnCancelNote').addEventListener('click', function() {
+  document.getElementById('noteForm').style.display = 'none';
+  document.getElementById('noteInput').value = '';
+});
+document.getElementById('btnSaveNote').addEventListener('click', async function() {
+  if (!currentCandidate) return;
+  var text = document.getElementById('noteInput').value.trim();
+  if (!text) return;
+  var btn = document.getElementById('btnSaveNote');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  var result = await supabaseClient.from('notes').insert({
+    candidate_id: currentCandidate.id,
+    author_email: (currentUser && currentUser.email) || 'Equipo',
+    text: text
+  }).select().single();
+  btn.disabled = false; btn.textContent = 'Guardar';
+  if (result.error) { console.error(result.error); return; }
+  currentCandidate.notes = (currentCandidate.notes || []).concat([result.data]);
+  var idx = allCandidates.findIndex(function(x){ return x.id === currentCandidate.id; });
+  if (idx !== -1) allCandidates[idx].notes = currentCandidate.notes;
+  renderNotes(currentCandidate.notes);
+  document.getElementById('noteForm').style.display = 'none';
+  document.getElementById('noteInput').value = '';
+});
+</script>
+</body>
+</html>
