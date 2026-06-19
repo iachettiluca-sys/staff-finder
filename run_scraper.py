@@ -74,7 +74,6 @@ def main() -> int:
     print(f"[scraper] Nuevos mails con CV: {len(emails)}")
 
     imported = 0
-    couple_questions = []
 
     for mail_data in emails:
         message_id = mail_data["message_id"]
@@ -98,15 +97,6 @@ def main() -> int:
             position = next((p for p in positions if p["title"] == position_detected), position)
         pos_title = position["title"] if position else position_detected
         pos_requirements = position["requirements"] if position else ""
-
-        if is_couple and len(attachments) == 1:
-            # Can't auto-split couple — ask Lucas
-            couple_questions.append(
-                f"Mail de: {sender_name} ({sender_email})\n"
-                f"Asunto: {mail_data['subject']}\n"
-                f"Mencionan ser pareja pero solo adjuntaron 1 CV. "
-                f"¿Cómo los cargo? (uno o dos candidatos separados)"
-            )
 
         if not attachments:
             # No attachment — create minimal candidate with bio only
@@ -150,7 +140,8 @@ def main() -> int:
             att_data = [att_data[0] if len(att_data[0]["cv_text"]) >= len(att_data[1]["cv_text"]) else att_data[1]]
             is_couple = False
 
-        actually_couple = is_couple and len(att_data) == 2
+        # Pareja = 2 adjuntos con nombres distintos. Sin más condiciones.
+        actually_couple = len(att_data) == 2
         candidate_ids = []
         for i, ad in enumerate(att_data):
             pdf_url = upload_pdf(search_id, f"{message_id}_{i}_{ad['att']['filename']}", ad["att"]["bytes"])
@@ -197,13 +188,6 @@ def main() -> int:
         if len(candidate_ids) == 2:
             link_couple(candidate_ids[0], candidate_ids[1])
             print(f"[scraper] Pareja vinculada: {candidate_ids[0]} <-> {candidate_ids[1]}")
-
-    # Notify about couple questions
-    if couple_questions:
-        body_q = "Hay candidatos que se presentaron como pareja pero con un solo CV adjunto. Necesito saber cómo cargarlos:\n\n"
-        body_q += "\n\n---\n\n".join(couple_questions)
-        send_email("Staff Finder — Consulta sobre parejas", body_q)
-        print(f"[scraper] Consulta de pareja enviada por mail ({len(couple_questions)} casos)")
 
     # Summary email
     if imported > 0:

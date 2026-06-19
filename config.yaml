@@ -16,20 +16,5 @@ positions:
       tener perfil de servicio, calidez, y experiencia en turismo de lujo u hospitalidad.
       Temporada noviembre 2026 a abril 2027.
 
-couple_keywords:
-  - "somos pareja"
-  - "somos dos"
-  - "aplicamos juntos"
-  - "los dos"
-  - "ambos"
-  - "mi compañero"
-  - "mi compañera"
-  - "mi pareja"
-  - "mi marido"
-  - "mi esposo"
-  - "mi mujer"
-  - "mi esposa"
-  - "juntos"
-  - "we are a couple"
-  - "both of us"
-  - "together"
+# Criterio de pareja: un mail con 2 CVs adjuntos de personas distintas = pareja.
+# No se usan keywords del cuerpo del mail.

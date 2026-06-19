@@ -75,11 +75,6 @@ def _is_cv_email(subject: str, body: str, has_attachment: bool) -> bool:
     return has_attachment and has_keyword or (has_keyword and not has_attachment)
 
 
-def _detect_couple(body: str, keywords: list[str]) -> bool:
-    body_lower = body.lower()
-    return any(kw.lower() in body_lower for kw in keywords)
-
-
 def _detect_position(subject: str, body: str) -> str:
     text = (subject + " " + body[:1000]).lower()
     if "chef" in text or "cocin" in text:
@@ -130,14 +125,15 @@ def find_bio_for_candidate(name: str, since_date: str) -> str | None:
     return None
 
 
-def scrape_gmail(since_date: str, couple_keywords: list[str],
-                 processed_ids: set[str]) -> list[dict]:
+def scrape_gmail(since_date: str, couple_keywords: list[str] = None,
+                 processed_ids: set[str] = None) -> list[dict]:
     """
     Conecta a Gmail IMAP y retorna lista de mails con CVs no procesados.
     """
     user = os.environ["GMAIL_USER"]
     app_pass = os.environ["GMAIL_APP_PASS"]
 
+    processed_ids = processed_ids or set()
     results = []
     mail = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
     try:
@@ -183,7 +179,8 @@ def scrape_gmail(since_date: str, couple_keywords: list[str],
             if not _is_cv_email(subject, body, bool(attachments)):
                 continue
 
-            is_couple = _detect_couple(body, couple_keywords)
+            # Pareja = 2 adjuntos CV de personas diferentes (se verifica en run_scraper)
+            is_couple = len(attachments) >= 2
             position = _detect_position(subject, body)
 
             results.append({
