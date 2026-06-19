@@ -93,10 +93,20 @@ def match_cv(
 
         bio_section = bio.strip() if bio.strip() else "(sin bio)"
 
+        # Definición de Host para este lodge de lujo
+        host_definition = (
+            "HOST en este contexto es un rol de servicio de lujo, 100% unisex. "
+            "Incluye: mozo/a, camarero/a, recepcionista, bartender, sommelier, "
+            "guía de actividades, coordinador/a de huéspedes, anfitrión/a. "
+            "Cualquier experiencia en atención al cliente, hotelería, turismo, "
+            "ventas, relaciones públicas o front of house cuenta positivamente para Host."
+        ) if position_title == "Host" else ""
+
         user_content = f"""Analizá la compatibilidad de {candidate_label} con el puesto de {position_title}.
 
 REQUISITOS DEL PUESTO:
 {position_requirements}
+{host_definition}
 
 ---
 {candidate_section}
@@ -107,13 +117,12 @@ BIO / PRESENTACIÓN del mail (complementaria al CV):
 ---
 
 INSTRUCCIONES:
-- El CV es tu fuente principal. Leélo completo y extraé toda la información relevante: experiencia, idiomas, habilidades, formación.
-- Si hay bio del mail, usala como información adicional.
-- Si el CV está vacío pero hay bio, evaluá con lo que tenés.
-- Puntuá del 0 al 100 qué tan bien encaja con el puesto.
-- El resumen y los puntos fuertes/débiles deben basarse en lo que leíste, no en suposiciones.
-- CRÍTICO: El género, sexo o nombre del candidato JAMÁS son criterios de evaluación. Nunca menciones el género como punto a favor ni en contra. Evaluá únicamente experiencia, habilidades e idiomas.
-- Si el candidato no encaja bien para el puesto al que aplicó pero tiene perfil para otro puesto disponible (Chef o Host), mencionalo en el resumen.
+- El CV es tu ÚNICA fuente principal de evaluación. Leélo completo y extraé toda la información relevante: experiencia, idiomas, habilidades, formación.
+- La bio del mail es solo información de contexto adicional, no reemplaza al CV.
+- Si el CV está vacío pero hay bio, evaluá con lo que tenés y aclaralo.
+- Puntuá del 0 al 100 qué tan bien encaja con el puesto basándote en el CV.
+- REGLA ABSOLUTA — GÉNERO: El género, sexo, nombre, origen o cualquier característica personal del candidato NUNCA es criterio de evaluación. La palabra "Host" es unisex. Mozo, moza, camarero, camarera son equivalentes. Evaluá ÚNICAMENTE experiencia laboral, habilidades e idiomas. Si mencionás el género de alguna forma, la evaluación es inválida.
+- Si el candidato no encaja para el puesto pero tiene perfil para el otro puesto disponible (Chef o Host), mencionalo brevemente en el resumen.
 - Respondé siempre en español usando la herramienta report_match."""
 
         response = _get_client().messages.create(
