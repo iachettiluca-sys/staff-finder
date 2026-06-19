@@ -107,6 +107,13 @@ def main():
     ).execute()
     rows2 = res2.data or []
 
+    # Build set of couple pairs (never dedup partners against each other)
+    couple_pairs: set[frozenset] = set()
+    for r in rows2:
+        pid = r.get("couple_partner_id")
+        if pid:
+            couple_pairs.add(frozenset([r["id"], pid]))
+
     # Group by cv_text fingerprint (first 400 chars, stripped)
     from collections import defaultdict
     cv_groups: dict[str, list] = defaultdict(list)
@@ -118,6 +125,12 @@ def main():
     to_delete_dup = []
     for fp, group in cv_groups.items():
         if len(group) < 2:
+            continue
+        # If all members of this group are couple-partners → skip (shared CV file is normal)
+        ids_in_group = {r["id"] for r in group}
+        if any(couple_pairs & {frozenset([a, b])
+               for a in ids_in_group for b in ids_in_group if a != b}):
+            print(f"  SKIP (pareja): {', '.join(r['name'] for r in group)}")
             continue
         # Keep the one with best data
         def _key(c):

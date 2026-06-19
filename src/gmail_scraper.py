@@ -173,6 +173,10 @@ def scrape_gmail(since_date: str, couple_keywords: list[str] = None,
             sender_name, sender_email = parseaddr(from_raw)
             sender_name = _decode_str(sender_name) or sender_email
 
+            # Ignorar mails enviados desde la propia cuenta
+            if sender_email.lower() == user.lower():
+                continue
+
             body = _get_body_text(msg)
             attachments = _get_attachments(msg)
 
