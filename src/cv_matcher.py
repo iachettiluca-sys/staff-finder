@@ -112,6 +112,8 @@ INSTRUCCIONES:
 - Si el CV está vacío pero hay bio, evaluá con lo que tenés.
 - Puntuá del 0 al 100 qué tan bien encaja con el puesto.
 - El resumen y los puntos fuertes/débiles deben basarse en lo que leíste, no en suposiciones.
+- CRÍTICO: El género, sexo o nombre del candidato JAMÁS son criterios de evaluación. Nunca menciones el género como punto a favor ni en contra. Evaluá únicamente experiencia, habilidades e idiomas.
+- Si el candidato no encaja bien para el puesto al que aplicó pero tiene perfil para otro puesto disponible (Chef o Host), mencionalo en el resumen.
 - Respondé siempre en español usando la herramienta report_match."""
 
         response = _get_client().messages.create(
