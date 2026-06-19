@@ -2,7 +2,7 @@
 cv_matcher.py — Llama a Claude API para puntuar un candidato contra los requisitos del puesto.
 """
 from __future__ import annotations
-import os, json
+import os
 import anthropic
 
 _client = None
@@ -25,21 +25,28 @@ TOOL_SCHEMA = {
             },
             "summary": {
                 "type": "string",
-                "description": "Resumen de 2-3 oraciones en español explicando el puntaje.",
+                "description": "Resumen de 2-3 oraciones en español explicando el puntaje basado en lo que se pudo leer.",
             },
             "strengths": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Lista de puntos fuertes del candidato para este puesto.",
+                "description": "Puntos fuertes del candidato para este puesto, extraídos del CV.",
             },
             "gaps": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Lista de aspectos que le faltan o no cumplen los requisitos.",
+                "description": "Aspectos que le faltan o no cumplen los requisitos.",
             },
         },
         "required": ["score", "summary", "strengths", "gaps"],
     },
+}
+
+_UNREADABLE = {
+    "score": 0,
+    "summary": "CV no legible (posiblemente PDF escaneado sin capa de texto). Requiere revisión manual.",
+    "strengths": [],
+    "gaps": ["PDF sin texto extraíble — revisar manualmente"],
 }
 
 _ERROR_RESULT = {"score": 0, "summary": "Error al analizar el CV.", "strengths": [], "gaps": []}
@@ -57,35 +64,55 @@ def match_cv(
 ) -> dict:
     """
     Puntúa al candidato (o pareja) contra los requisitos del puesto.
+    El CV es la fuente principal. La bio complementa si existe.
     Retorna dict con score, summary, strengths, gaps.
     Nunca lanza excepciones.
     """
+    # Si no hay absolutamente nada que leer, marcar como no legible
+    if not cv_text.strip() and not bio.strip() and not partner_cv_text.strip():
+        return _UNREADABLE
+
     try:
         if is_couple and partner_name:
+            cv1 = cv_text.strip() or "(CV no extraíble)"
+            cv2 = partner_cv_text.strip() or "(CV no extraíble)"
             candidate_section = (
                 f"CANDIDATO 1 — {candidate_name}\n"
-                f"CV:\n{cv_text or '(sin CV)'}\n\n"
+                f"CV completo:\n{cv1[:5000]}\n\n"
                 f"CANDIDATO 2 — {partner_name}\n"
-                f"CV:\n{partner_cv_text or '(sin CV)'}\n"
+                f"CV completo:\n{cv2[:5000]}\n"
             )
             candidate_label = f"la pareja {candidate_name} y {partner_name}"
         else:
-            candidate_section = f"CANDIDATO — {candidate_name}\nCV:\n{cv_text or '(sin CV)'}"
+            cv_content = cv_text.strip() or "(CV no extraíble — solo bio disponible)"
+            candidate_section = (
+                f"CANDIDATO — {candidate_name}\n"
+                f"CV completo (leé todo, es la fuente principal):\n{cv_content[:8000]}"
+            )
             candidate_label = candidate_name
 
-        user_content = f"""Analizá la compatibilidad de {candidate_label} con el siguiente puesto:
+        bio_section = bio.strip() if bio.strip() else "(sin bio)"
 
-PUESTO: {position_title}
-REQUISITOS:
+        user_content = f"""Analizá la compatibilidad de {candidate_label} con el puesto de {position_title}.
+
+REQUISITOS DEL PUESTO:
 {position_requirements}
 
 ---
 {candidate_section}
----
-BIO / PRESENTACIÓN (del cuerpo del mail):
-{bio or '(sin bio)'}
 
-Puntuá del 0 al 100 qué tan bien encajan con el puesto y usá la herramienta report_match para reportar el resultado en español."""
+---
+BIO / PRESENTACIÓN del mail (complementaria al CV):
+{bio_section}
+---
+
+INSTRUCCIONES:
+- El CV es tu fuente principal. Leélo completo y extraé toda la información relevante: experiencia, idiomas, habilidades, formación.
+- Si hay bio del mail, usala como información adicional.
+- Si el CV está vacío pero hay bio, evaluá con lo que tenés.
+- Puntuá del 0 al 100 qué tan bien encaja con el puesto.
+- El resumen y los puntos fuertes/débiles deben basarse en lo que leíste, no en suposiciones.
+- Respondé siempre en español usando la herramienta report_match."""
 
         response = _get_client().messages.create(
             model="claude-haiku-4-5-20251001",
