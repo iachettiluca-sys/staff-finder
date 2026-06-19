@@ -84,9 +84,9 @@ def _detect_position(subject: str, body: str) -> str:
     text = (subject + " " + body[:1000]).lower()
     if "chef" in text or "cocin" in text:
         return "Chef"
-    if "hostess" in text or "anfitriona" in text:
-        return "Hostess"
-    if "host" in text or "anfitrión" in text or "anfitrion" in text:
+    # hostess y host se unifican en Host
+    if ("host" in text or "hostess" in text
+            or "anfitrión" in text or "anfitrion" in text or "anfitriona" in text):
         return "Host"
     return "unknown"
 

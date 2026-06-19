@@ -17,6 +17,7 @@ import yaml
 from gmail_scraper import scrape_gmail
 from pdf_extractor import extract_attachment_text
 from cv_matcher import match_cv
+from name_extractor import extract_name_and_position
 from supabase_ops import (
     get_or_create_search, get_processed_message_ids,
     ensure_positions, upload_pdf, create_candidate, link_couple,
@@ -81,11 +82,20 @@ def main() -> int:
         sender_email = mail_data["sender_email"]
         body = mail_data["body"]
         is_couple = mail_data["is_couple"]
-        position_detected = mail_data["position"]
         attachments = mail_data["attachments"]
+
+        # Extraer nombre real y puesto desde el primer CV adjunto
+        first_cv_text = ""
+        if attachments:
+            first_cv_text = extract_attachment_text(attachments[0]["filename"], attachments[0]["bytes"])
+        info = extract_name_and_position(first_cv_text, body, sender_name)
+        sender_name = info["full_name"]
+        position_detected = info["position"]
 
         # Find position config
         position = find_position(mail_data["subject"], body, positions)
+        if position_detected != "unknown":
+            position = next((p for p in positions if p["title"] == position_detected), position)
         pos_title = position["title"] if position else position_detected
         pos_requirements = position["requirements"] if position else ""
 

@@ -75,7 +75,15 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .badge{display:inline-flex;align-items:center;gap:.25rem;font-size:.72rem;font-weight:600;padding:.2rem .55rem;border-radius:20px;white-space:nowrap}
 .badge-chef{background:#DBEAFE;color:#1D4ED8}
 .badge-host{background:#CCFBF1;color:#0D9488}
-.badge-hostess{background:#EDE9FE;color:#7C3AED}
+.coupleCard .cardTop{display:none}
+.coupledMembers{display:flex;align-items:center;gap:.6rem;flex:1;min-width:0}
+.coupleMember{display:flex;align-items:center;gap:.5rem;min-width:0;flex:1}
+.memberInfo{display:flex;flex-direction:column;gap:.25rem;min-width:0}
+.memberInfo .candidateName{font-size:.85rem}
+.coupleJoiner{font-size:1.1rem;color:var(--muted);flex-shrink:0}
+.coupleTop{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.coupleActions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.2rem}
+.coupleActions .btnVerPerfil{flex:1}
 .badge-unknown{background:#F1F5F9;color:var(--muted)}
 .badge-couple{background:#FEF3C7;color:#B45309}
 .badge-nuevo{background:#F1F5F9;color:#64748B}
@@ -178,7 +186,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
       <option value="">Todos los puestos</option>
       <option value="chef">Chef</option>
       <option value="host">Host</option>
-      <option value="hostess">Hostess</option>
       <option value="unknown">Desconocido</option>
     </select>
     <select id="fCategory">
@@ -290,7 +297,7 @@ function initials(name) {
   return (name || '?').split(' ').slice(0,2).map(function(p){ return p[0] || ''; }).join('').toUpperCase() || '?';
 }
 function avatarColor(pos) {
-  var m = {chef:'#1D4ED8', host:'#0D9488', hostess:'#7C3AED'};
+  var m = {chef:'#1D4ED8', host:'#0D9488'};
   return m[pos] || '#64748B';
 }
 function scoreColor(s) {
@@ -298,7 +305,7 @@ function scoreColor(s) {
   return s >= 75 ? '#22C55E' : s >= 50 ? '#F59E0B' : '#EF4444';
 }
 function posLabel(p) {
-  var m = {chef:'Chef', host:'Host', hostess:'Hostess', unknown:'?'};
+  var m = {chef:'Chef', host:'Host', unknown:'?'};
   return m[p] || (p || '?');
 }
 function statusLabel(s) {
@@ -445,10 +452,67 @@ function showGrid(candidates) {
     grid.innerHTML = '<div class="emptyState"><div class="ei">&#128269;</div><h3>Sin resultados</h3><p>Proba cambiando los filtros.</p></div>';
     return;
   }
-  grid.innerHTML = candidates.map(cardHTML).join('');
+  var rendered = new Set();
+  var cards = [];
+  candidates.forEach(function(c) {
+    if (rendered.has(c.id)) return;
+    if (c.category === 'couple' && c.couple_partner_id) {
+      var partner = allCandidates.find(function(x){ return x.id === c.couple_partner_id; });
+      if (partner) {
+        rendered.add(c.id);
+        rendered.add(partner.id);
+        cards.push(coupleCardHTML(c, partner));
+        return;
+      }
+    }
+    rendered.add(c.id);
+    cards.push(cardHTML(c));
+  });
+  grid.innerHTML = cards.join('');
   grid.querySelectorAll('.btnVerPerfil').forEach(function(btn) {
     btn.addEventListener('click', function(){ openDetail(btn.dataset.id); });
   });
+}
+
+function coupleCardHTML(c1, c2) {
+  var sn1 = (c1.ai_score !== null && c1.ai_score !== undefined) ? c1.ai_score : null;
+  var sn2 = (c2.ai_score !== null && c2.ai_score !== undefined) ? c2.ai_score : null;
+  var avgScore = (sn1 !== null && sn2 !== null) ? Math.round((sn1 + sn2) / 2) : (sn1 !== null ? sn1 : sn2);
+  var isDisc = c1.status === 'descartado' && c2.status === 'descartado';
+  var firstName1 = (c1.name || '').split(' ')[0] || 'Ver';
+  var firstName2 = (c2.name || '').split(' ')[0] || 'Ver';
+  var summary = c1.ai_summary ? '<div class="cardSummary">' + c1.ai_summary + '</div>' : '';
+  return '<div class="cCard coupleCard' + (isDisc ? ' descartado' : '') + '">' +
+    '<div class="coupleTop">' +
+      '<div class="coupledMembers">' +
+        '<div class="coupleMember">' +
+          '<div class="avatar" style="background:' + avatarColor(c1.position) + '">' + initials(c1.name) + '</div>' +
+          '<div class="memberInfo">' +
+            '<span class="candidateName">' + c1.name + '</span>' +
+            '<span class="badge badge-' + (c1.position || 'unknown') + '">' + posLabel(c1.position) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="coupleJoiner">&#8651;</div>' +
+        '<div class="coupleMember">' +
+          '<div class="avatar" style="background:' + avatarColor(c2.position) + '">' + initials(c2.name) + '</div>' +
+          '<div class="memberInfo">' +
+            '<span class="candidateName">' + c2.name + '</span>' +
+            '<span class="badge badge-' + (c2.position || 'unknown') + '">' + posLabel(c2.position) + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="scoreBadge" style="background:' + scoreColor(avgScore) + '">' + (avgScore !== null ? avgScore : '-') + '</div>' +
+    '</div>' +
+    '<div class="badgesRow">' +
+      '<span class="badge badge-couple">&#8651; Pareja</span>' +
+      '<span class="badge badge-' + (c1.status || 'nuevo') + '">' + statusLabel(c1.status) + '</span>' +
+    '</div>' +
+    summary +
+    '<div class="coupleActions">' +
+      '<button class="btnVerPerfil" data-id="' + c1.id + '">Ver ' + firstName1 + '</button>' +
+      '<button class="btnVerPerfil" data-id="' + c2.id + '">Ver ' + firstName2 + '</button>' +
+    '</div>' +
+  '</div>';
 }
 
 function cardHTML(c) {
