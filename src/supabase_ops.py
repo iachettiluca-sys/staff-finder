@@ -2,8 +2,15 @@
 supabase_ops.py — Operaciones CRUD sobre Supabase para Staff Finder.
 """
 from __future__ import annotations
-import os, json
+import os, json, re, unicodedata
 from supabase import create_client, Client
+
+
+def _safe_storage_path(name: str) -> str:
+    """Sanitize a filename for Supabase Storage: ASCII only, no spaces."""
+    normalized = unicodedata.normalize("NFD", name)
+    ascii_only = normalized.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-zA-Z0-9._\-]", "_", ascii_only)
 
 _client: Client | None = None
 
@@ -52,13 +59,14 @@ def ensure_positions(search_id: str, positions_cfg: list[dict]) -> list[dict]:
 
 def upload_pdf(search_id: str, filename: str, file_bytes: bytes) -> str:
     sb = get_client()
-    path = f"{search_id}/{filename}"
+    safe_name = _safe_storage_path(filename)
+    path = f"{search_id}/{safe_name}"
     try:
-        sb.storage.from_("cvs").upload(path, file_bytes, {"content-type": "application/pdf", "upsert": "true"})
+        sb.storage.from_("CVS").upload(path, file_bytes, {"content-type": "application/pdf", "upsert": "true"})
     except Exception as e:
         print(f"[supabase] Error subiendo PDF {filename}: {e}")
         return ""
-    res = sb.storage.from_("cvs").get_public_url(path)
+    res = sb.storage.from_("CVS").get_public_url(path)
     return res
 
 
@@ -83,7 +91,7 @@ def list_upload_files() -> list[dict]:
     """List pending files in the uploads/ prefix of the cvs bucket."""
     sb = get_client()
     try:
-        items = sb.storage.from_("cvs").list("uploads") or []
+        items = sb.storage.from_("CVS").list("uploads") or []
         return [{"name": f"uploads/{item['name']}", **item} for item in items
                 if item.get("name") and not item["name"].startswith(".")]
     except Exception as e:
@@ -95,7 +103,7 @@ def download_storage_file(path: str) -> bytes | None:
     """Download a file from Supabase Storage (path relative to bucket root)."""
     sb = get_client()
     try:
-        return sb.storage.from_("cvs").download(path)
+        return sb.storage.from_("CVS").download(path)
     except Exception as e:
         print(f"[supabase] Error descargando {path}: {e}")
         return None
@@ -105,7 +113,7 @@ def delete_storage_files(paths: list[str]) -> None:
     """Delete files from the cvs bucket."""
     sb = get_client()
     try:
-        sb.storage.from_("cvs").remove(paths)
+        sb.storage.from_("CVS").remove(paths)
     except Exception as e:
         print(f"[supabase] Error eliminando archivos de Storage: {e}")
 

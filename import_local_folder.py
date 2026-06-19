@@ -130,7 +130,7 @@ def process_file(f: Path, positions: list[dict], search_id: str,
         position_requirements=pos_req,
     )
 
-    print(f"  {name} → {pos_title} — score: {match['score']}")
+    print(f"  {name} -> {pos_title} -- score: {match['score']}")
     return {
         "file_bytes": file_bytes,
         "filename": f.name,
@@ -145,13 +145,28 @@ def process_file(f: Path, positions: list[dict], search_id: str,
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("Uso: python import_local_folder.py <carpeta>")
+        print("Uso: python import_local_folder.py <carpeta_o_zip>")
         return 1
 
-    folder = Path(sys.argv[1])
-    if not folder.exists():
-        print(f"Carpeta no encontrada: {folder}")
+    input_path = Path(sys.argv[1])
+    if not input_path.exists():
+        print(f"No encontrado: {input_path}")
         return 1
+
+    # Si es un ZIP, extraerlo a un directorio temporal
+    _tmpdir = None
+    if input_path.suffix.lower() == ".zip":
+        import zipfile, tempfile
+        _tmpdir = tempfile.mkdtemp(prefix="staff_finder_")
+        folder = Path(_tmpdir)
+        print(f"Extrayendo ZIP en {folder} ...")
+        with zipfile.ZipFile(input_path) as zf:
+            zf.extractall(folder)
+    else:
+        folder = input_path
+        if not folder.is_dir():
+            print(f"No es una carpeta ni un ZIP: {folder}")
+            return 1
 
     cfg = yaml.safe_load((root / "config.yaml").read_text(encoding="utf-8"))
     search_cfg = cfg["search"]
