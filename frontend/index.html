@@ -145,6 +145,26 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .noteFormBtns{display:flex;gap:.5rem}
 .btnSaveNote{padding:.45rem .9rem;background:var(--primary);color:#fff;border:none;border-radius:6px;font-size:.82rem;font-weight:600;cursor:pointer}
 .btnCancelNote{padding:.45rem .9rem;background:transparent;border:1.5px solid var(--border);border-radius:6px;font-size:.82rem;cursor:pointer}
+
+/* UPLOAD */
+#dragOverlay{display:none;position:fixed;inset:0;background:rgba(59,125,216,.12);border:4px dashed var(--accent);z-index:150;align-items:center;justify-content:center;pointer-events:none}
+#dragOverlay.active{display:flex}
+.dragOverlayBox{background:var(--card);border-radius:16px;padding:2rem 3rem;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.15);pointer-events:none}
+.dragOverlayBox .doi{font-size:2.5rem;margin-bottom:.5rem}
+.dragOverlayBox strong{font-size:1.1rem;color:var(--primary);display:block}
+.dragOverlayBox span{font-size:.82rem;color:var(--muted)}
+.btnUpload{padding:.4rem .85rem;background:var(--primary);color:#fff;border:none;border-radius:6px;font-size:.82rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:.3rem;white-space:nowrap}
+.btnUpload:hover{opacity:.88}
+#uploadModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+#uploadModal.open{display:flex}
+.uploadBox{background:var(--card);border-radius:var(--radius);padding:1.75rem;width:90%;max-width:460px;display:flex;flex-direction:column;gap:.9rem;box-shadow:0 8px 40px rgba(0,0,0,.18)}
+.uploadBox h3{font-size:1rem;font-weight:700;color:var(--text)}
+.uploadList{display:flex;flex-direction:column;gap:.4rem;max-height:260px;overflow-y:auto}
+.uploadItem{display:flex;align-items:center;gap:.6rem;font-size:.8rem;padding:.4rem .6rem;background:var(--bg);border-radius:6px}
+.uploadItemName{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.uploadItemSt{flex-shrink:0;font-size:.75rem;font-weight:600}
+.uploadNote{font-size:.78rem;color:var(--muted);background:var(--bg);padding:.65rem .8rem;border-radius:6px;line-height:1.55}
+.uploadNote code{font-family:monospace;background:#E2E8F0;padding:.1em .3em;border-radius:3px;font-size:.9em}
 </style>
 </head>
 <body>
@@ -209,12 +229,40 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     </div>
     <input type="text" id="fName" placeholder="Buscar por nombre..." style="min-width:160px">
     <button class="btnReload" id="btnReload">&#8635; Actualizar</button>
+    <button class="btnUpload" id="btnUpload">&#8679; Subir CVs</button>
+    <input type="file" id="uploadInput" accept=".pdf,.doc,.docx,.zip" multiple style="display:none">
   </div>
 
   <div class="statsStrip" id="statsStrip"></div>
 
   <div class="gridWrap">
     <div class="candidatesGrid" id="grid"></div>
+  </div>
+</div>
+
+<!-- Drag overlay -->
+<div id="dragOverlay">
+  <div class="dragOverlayBox">
+    <div class="doi">&#8679;</div>
+    <strong>Soltá los archivos acá</strong>
+    <span>PDF, DOCX o ZIP con múltiples CVs</span>
+  </div>
+</div>
+
+<!-- Upload modal -->
+<div id="uploadModal">
+  <div class="uploadBox">
+    <h3 id="uploadTitle">Subiendo archivos...</h3>
+    <div class="uploadList" id="uploadList"></div>
+    <div id="uploadDone" style="display:none;flex-direction:column;gap:.75rem">
+      <p id="uploadSummary" style="font-size:.88rem;color:var(--text);font-weight:600"></p>
+      <div class="uploadNote">
+        Los CVs quedan en cola en Supabase Storage. Para procesarlos ahora corré:<br>
+        <code>python import_uploads.py</code><br><br>
+        O esperá al scraper automático (cada 2 días).
+      </div>
+      <button class="btnPrimary" id="uploadClose">Cerrar</button>
+    </div>
   </div>
 </div>
 
@@ -642,6 +690,76 @@ document.getElementById('btnCancelNote').addEventListener('click', function() {
   document.getElementById('noteForm').style.display = 'none';
   document.getElementById('noteInput').value = '';
 });
+// UPLOAD
+var _dragDepth = 0;
+var UPLOAD_EXTS = ['pdf','doc','docx','zip'];
+
+document.getElementById('btnUpload').addEventListener('click', function() {
+  document.getElementById('uploadInput').click();
+});
+document.getElementById('uploadInput').addEventListener('change', function() {
+  handleUploadFiles(Array.from(this.files));
+  this.value = '';
+});
+document.getElementById('uploadClose').addEventListener('click', function() {
+  document.getElementById('uploadModal').classList.remove('open');
+});
+
+window.addEventListener('dragenter', function(e) {
+  e.preventDefault();
+  _dragDepth++;
+  document.getElementById('dragOverlay').classList.add('active');
+});
+window.addEventListener('dragleave', function(e) {
+  _dragDepth--;
+  if (_dragDepth <= 0) { _dragDepth = 0; document.getElementById('dragOverlay').classList.remove('active'); }
+});
+window.addEventListener('dragover', function(e) { e.preventDefault(); });
+window.addEventListener('drop', function(e) {
+  e.preventDefault();
+  _dragDepth = 0;
+  document.getElementById('dragOverlay').classList.remove('active');
+  handleUploadFiles(Array.from(e.dataTransfer.files));
+});
+
+function handleUploadFiles(files) {
+  var valid = files.filter(function(f) {
+    return UPLOAD_EXTS.indexOf(f.name.split('.').pop().toLowerCase()) !== -1;
+  });
+  if (!valid.length) return;
+  document.getElementById('uploadTitle').textContent = 'Subiendo ' + valid.length + ' archivo(s)...';
+  document.getElementById('uploadList').innerHTML = '';
+  document.getElementById('uploadDone').style.display = 'none';
+  document.getElementById('uploadModal').classList.add('open');
+  uploadFilesToStorage(valid);
+}
+
+async function uploadFilesToStorage(files) {
+  var list = document.getElementById('uploadList');
+  var ok = 0, fail = 0;
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i];
+    var item = document.createElement('div');
+    item.className = 'uploadItem';
+    item.innerHTML = '<span class="uploadItemName">' + f.name + '</span>' +
+      '<span class="uploadItemSt" id="ust' + i + '" style="color:var(--muted)">Subiendo...</span>';
+    list.appendChild(item);
+    var path = 'uploads/' + Date.now() + '_' + f.name.replace(/[^a-zA-Z0-9._\-]/g, '_');
+    var res = await supabaseClient.storage.from('cvs').upload(path, f, { upsert: true });
+    var st = document.getElementById('ust' + i);
+    if (res.error) {
+      st.textContent = '✗ Error'; st.style.color = 'var(--danger)'; fail++;
+    } else {
+      st.textContent = '✓ Ok'; st.style.color = 'var(--success)'; ok++;
+    }
+  }
+  document.getElementById('uploadTitle').textContent = 'Listo';
+  document.getElementById('uploadSummary').textContent =
+    ok + ' archivo(s) subido(s)' + (fail ? ', ' + fail + ' con error' : '') + '.';
+  var doneEl = document.getElementById('uploadDone');
+  doneEl.style.display = 'flex';
+}
+
 document.getElementById('btnSaveNote').addEventListener('click', async function() {
   if (!currentCandidate) return;
   var text = document.getElementById('noteInput').value.trim();

@@ -77,3 +77,53 @@ def link_couple(candidate_id_1: str, candidate_id_2: str) -> None:
     sb = get_client()
     sb.table("candidates").update({"couple_partner_id": candidate_id_2, "category": "couple"}).eq("id", candidate_id_1).execute()
     sb.table("candidates").update({"couple_partner_id": candidate_id_1, "category": "couple"}).eq("id", candidate_id_2).execute()
+
+
+def list_upload_files() -> list[dict]:
+    """List pending files in the uploads/ prefix of the cvs bucket."""
+    sb = get_client()
+    try:
+        items = sb.storage.from_("cvs").list("uploads") or []
+        return [{"name": f"uploads/{item['name']}", **item} for item in items
+                if item.get("name") and not item["name"].startswith(".")]
+    except Exception as e:
+        print(f"[supabase] Error listando uploads: {e}")
+        return []
+
+
+def download_storage_file(path: str) -> bytes | None:
+    """Download a file from Supabase Storage (path relative to bucket root)."""
+    sb = get_client()
+    try:
+        return sb.storage.from_("cvs").download(path)
+    except Exception as e:
+        print(f"[supabase] Error descargando {path}: {e}")
+        return None
+
+
+def delete_storage_files(paths: list[str]) -> None:
+    """Delete files from the cvs bucket."""
+    sb = get_client()
+    try:
+        sb.storage.from_("cvs").remove(paths)
+    except Exception as e:
+        print(f"[supabase] Error eliminando archivos de Storage: {e}")
+
+
+def find_candidate_by_name(search_id: str, name: str) -> dict | None:
+    """Find an existing candidate by name (case-insensitive exact match)."""
+    if not name or name.lower() in ("desconocido", "unknown", ""):
+        return None
+    sb = get_client()
+    res = (sb.table("candidates")
+           .select("id,name,bio,gmail_message_id")
+           .eq("search_id", search_id)
+           .ilike("name", name)
+           .execute())
+    return res.data[0] if res.data else None
+
+
+def update_candidate(candidate_id: str, updates: dict) -> None:
+    """Update arbitrary fields on a candidate."""
+    sb = get_client()
+    sb.table("candidates").update(updates).eq("id", candidate_id).execute()

@@ -91,6 +91,45 @@ def _detect_position(subject: str, body: str) -> str:
     return "unknown"
 
 
+def find_bio_for_candidate(name: str, since_date: str) -> str | None:
+    """
+    Searches Gmail for an email about the given candidate (by name in subject).
+    Returns email body text if a CV-related email is found, None otherwise.
+    Used to enrich candidates imported from local files who may also have emailed.
+    """
+    import re as _re, datetime as _dt
+    user = os.environ.get("GMAIL_USER")
+    app_pass = os.environ.get("GMAIL_APP_PASS")
+    if not (user and app_pass):
+        return None
+    name_parts = name.strip().split()
+    if not name_parts or name_parts[0].lower() in ("desconocido", "unknown"):
+        return None
+    first_name = name_parts[0]
+    try:
+        dt = _dt.date.fromisoformat(since_date)
+        since_str = dt.strftime("%d-%b-%Y")
+        mail = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
+        mail.login(user, app_pass)
+        mail.select("INBOX")
+        _, msg_nums = mail.search(None, f'SINCE "{since_str}" SUBJECT "{first_name}"')
+        if msg_nums[0]:
+            for num in msg_nums[0].split()[:5]:
+                _, data = mail.fetch(num, "(RFC822)")
+                raw = data[0][1]
+                msg = email.message_from_bytes(raw)
+                body = _get_body_text(msg)
+                last_name = name_parts[-1].lower() if len(name_parts) > 1 else ""
+                if last_name and last_name in body.lower():
+                    if _is_cv_email(msg.get("Subject", ""), body, bool(_get_attachments(msg))):
+                        mail.logout()
+                        return body[:2000]
+        mail.logout()
+    except Exception as e:
+        print(f"[gmail_enrich] Error buscando bio para {name}: {e}")
+    return None
+
+
 def scrape_gmail(since_date: str, couple_keywords: list[str],
                  processed_ids: set[str]) -> list[dict]:
     """
