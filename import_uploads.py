@@ -229,21 +229,30 @@ def main() -> int:
                     d2 = _process_single_cv(f2, b2, positions, search_id, processed_ids)
 
                     if d1 and d2:
-                        pos_cfg = next((p for p in positions if p["title"] == d1["position"]), positions[0])
-                        couple_match = match_cv(
-                            cv_text=d1["cv_text"], bio="",
-                            candidate_name=d1["name"],
-                            position_title=d1["position"],
-                            position_requirements=pos_cfg["requirements"],
-                            is_couple=True,
-                            partner_name=d2["name"],
-                            partner_cv_text=d2["cv_text"],
-                        )
-                        id1 = _insert_candidate(d1, search_id, "couple", couple_match)
-                        id2 = _insert_candidate(d2, search_id, "couple", couple_match)
-                        link_couple(id1, id2)
-                        imported += 2
-                        processed_ids.update({d1["fake_id"], d2["fake_id"]})
+                        # Mismo nombre → CV + carta de recomendación, no es pareja
+                        if d1["name"].strip().lower() == d2["name"].strip().lower():
+                            print(f"  [mismo nombre] '{d1['name']}' — no es pareja, importando el de mayor contenido")
+                            best = d1 if len(d1["cv_text"]) >= len(d2["cv_text"]) else d2
+                            _insert_candidate(best, search_id, "solo")
+                            imported += 1
+                            processed_ids.add(best["fake_id"])
+                        else:
+                            # Nombres distintos → pareja real
+                            pos_cfg = next((p for p in positions if p["title"] == d1["position"]), positions[0])
+                            couple_match = match_cv(
+                                cv_text=d1["cv_text"], bio="",
+                                candidate_name=d1["name"],
+                                position_title=d1["position"],
+                                position_requirements=pos_cfg["requirements"],
+                                is_couple=True,
+                                partner_name=d2["name"],
+                                partner_cv_text=d2["cv_text"],
+                            )
+                            id1 = _insert_candidate(d1, search_id, "couple", couple_match)
+                            id2 = _insert_candidate(d2, search_id, "couple", couple_match)
+                            link_couple(id1, id2)
+                            imported += 2
+                            processed_ids.update({d1["fake_id"], d2["fake_id"]})
                     else:
                         for d in [d1, d2]:
                             if d:

@@ -133,34 +133,57 @@ def main() -> int:
             print(f"[scraper] Candidato importado (sin CV): {sender_name} — score: {match['score']}")
             continue
 
-        # Process each attachment as a separate candidate (handles couples with 2 CVs)
-        candidate_ids = []
-        for i, att in enumerate(attachments[:2]):  # max 2 per mail
+        # Extract name and text from each attachment first (max 2)
+        atts = attachments[:2]
+        att_data = []
+        for att in atts:
             cv_text = extract_attachment_text(att["filename"], att["bytes"])
-            pdf_url = upload_pdf(search_id, f"{message_id}_{i}_{att['filename']}", att["bytes"])
+            att_info = extract_name_and_position(cv_text, body if not att_data else "", sender_name)
+            att_data.append({"att": att, "cv_text": cv_text,
+                             "name": att_info["full_name"],
+                             "pos": att_info["position"]})
 
-            name = sender_name if i == 0 else f"{sender_name} (2)"
+        # Mismo nombre en los dos adjuntos → CV + carta, no pareja
+        if (len(att_data) == 2 and
+                att_data[0]["name"].strip().lower() == att_data[1]["name"].strip().lower()):
+            print(f"[scraper] Mismo nombre ('{att_data[0]['name']}') en 2 adjuntos — no es pareja, tomando el de mayor contenido")
+            att_data = [att_data[0] if len(att_data[0]["cv_text"]) >= len(att_data[1]["cv_text"]) else att_data[1]]
+            is_couple = False
+
+        actually_couple = is_couple and len(att_data) == 2
+        candidate_ids = []
+        for i, ad in enumerate(att_data):
+            pdf_url = upload_pdf(search_id, f"{message_id}_{i}_{ad['att']['filename']}", ad["att"]["bytes"])
+
+            partner_name = att_data[1 - i]["name"] if actually_couple else ""
+            partner_cv   = att_data[1 - i]["cv_text"] if actually_couple else ""
+
+            # Override position with Claude-detected if not unknown
+            final_pos = position
+            if ad["pos"] != "unknown":
+                final_pos = next((p for p in positions if p["title"] == ad["pos"]), position)
+
             match = match_cv(
-                cv_text=cv_text,
+                cv_text=ad["cv_text"],
                 bio=body if i == 0 else "",
-                candidate_name=name,
-                position_title=pos_title,
-                position_requirements=pos_requirements,
-                is_couple=is_couple and len(attachments) >= 2,
-                partner_name=sender_name if i == 1 else "",
-                partner_cv_text=extract_attachment_text(attachments[0]["filename"], attachments[0]["bytes"]) if i == 1 else "",
+                candidate_name=ad["name"],
+                position_title=final_pos["title"] if final_pos else pos_title,
+                position_requirements=final_pos["requirements"] if final_pos else pos_requirements,
+                is_couple=actually_couple,
+                partner_name=partner_name,
+                partner_cv_text=partner_cv,
             )
 
             candidate_id = create_candidate({
                 "search_id": search_id,
-                "name": name,
+                "name": ad["name"],
                 "email": sender_email if i == 0 else "",
                 "bio": body if i == 0 else "",
                 "pdf_url": pdf_url,
-                "pdf_text": cv_text,
+                "pdf_text": ad["cv_text"],
                 "gmail_message_id": message_id if i == 0 else f"{message_id}_p2",
-                "position": pos_title,
-                "category": "couple" if is_couple else "solo",
+                "position": final_pos["title"] if final_pos else pos_title,
+                "category": "couple" if actually_couple else "solo",
                 "status": "nuevo",
                 "ai_score": match["score"],
                 "ai_summary": match["summary"],
@@ -169,7 +192,7 @@ def main() -> int:
             })
             candidate_ids.append(candidate_id)
             imported += 1
-            print(f"[scraper] Candidato importado: {name} — score: {match['score']}")
+            print(f"[scraper] Candidato importado: {ad['name']} — score: {match['score']}")
 
         if len(candidate_ids) == 2:
             link_couple(candidate_ids[0], candidate_ids[1])

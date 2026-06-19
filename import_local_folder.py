@@ -178,35 +178,49 @@ def main() -> int:
             d2 = process_file(f2, positions, search_id, processed_ids)
 
             if d1 and d2:
-                # Re-matchear como pareja
-                pos_cfg = next((p for p in positions if p["title"] == d1["position"]), positions[0])
-                match_pair = match_cv(
-                    cv_text=d1["cv_text"], bio="",
-                    candidate_name=d1["name"],
-                    position_title=d1["position"],
-                    position_requirements=pos_cfg["requirements"],
-                    is_couple=True,
-                    partner_name=d2["name"],
-                    partner_cv_text=d2["cv_text"],
-                )
-                id1 = create_candidate({
-                    "search_id": search_id, "name": d1["name"], "email": "",
-                    "bio": "", "pdf_url": d1["pdf_url"], "pdf_text": d1["cv_text"],
-                    "gmail_message_id": d1["fake_id"], "position": d1["position"],
-                    "category": "couple", "status": "nuevo",
-                    "ai_score": match_pair["score"], "ai_summary": match_pair["summary"],
-                    "ai_strengths": match_pair["strengths"], "ai_gaps": match_pair["gaps"],
-                })
-                id2 = create_candidate({
-                    "search_id": search_id, "name": d2["name"], "email": "",
-                    "bio": "", "pdf_url": d2["pdf_url"], "pdf_text": d2["cv_text"],
-                    "gmail_message_id": d2["fake_id"], "position": d2["position"],
-                    "category": "couple", "status": "nuevo",
-                    "ai_score": match_pair["score"], "ai_summary": match_pair["summary"],
-                    "ai_strengths": match_pair["strengths"], "ai_gaps": match_pair["gaps"],
-                })
-                link_couple(id1, id2)
-                imported += 2
+                # Mismo nombre → no es pareja, es CV + carta de recomendación u otro doc
+                if d1["name"].strip().lower() == d2["name"].strip().lower():
+                    print(f"  [mismo nombre] '{d1['name']}' — no es pareja, importando el de mayor contenido")
+                    best = d1 if len(d1["cv_text"]) >= len(d2["cv_text"]) else d2
+                    create_candidate({
+                        "search_id": search_id, "name": best["name"], "email": "",
+                        "bio": "", "pdf_url": best["pdf_url"], "pdf_text": best["cv_text"],
+                        "gmail_message_id": best["fake_id"], "position": best["position"],
+                        "category": "solo", "status": "nuevo",
+                        "ai_score": best["match"]["score"], "ai_summary": best["match"]["summary"],
+                        "ai_strengths": best["match"]["strengths"], "ai_gaps": best["match"]["gaps"],
+                    })
+                    imported += 1
+                else:
+                    # Nombres distintos → pareja real
+                    pos_cfg = next((p for p in positions if p["title"] == d1["position"]), positions[0])
+                    match_pair = match_cv(
+                        cv_text=d1["cv_text"], bio="",
+                        candidate_name=d1["name"],
+                        position_title=d1["position"],
+                        position_requirements=pos_cfg["requirements"],
+                        is_couple=True,
+                        partner_name=d2["name"],
+                        partner_cv_text=d2["cv_text"],
+                    )
+                    id1 = create_candidate({
+                        "search_id": search_id, "name": d1["name"], "email": "",
+                        "bio": "", "pdf_url": d1["pdf_url"], "pdf_text": d1["cv_text"],
+                        "gmail_message_id": d1["fake_id"], "position": d1["position"],
+                        "category": "couple", "status": "nuevo",
+                        "ai_score": match_pair["score"], "ai_summary": match_pair["summary"],
+                        "ai_strengths": match_pair["strengths"], "ai_gaps": match_pair["gaps"],
+                    })
+                    id2 = create_candidate({
+                        "search_id": search_id, "name": d2["name"], "email": "",
+                        "bio": "", "pdf_url": d2["pdf_url"], "pdf_text": d2["cv_text"],
+                        "gmail_message_id": d2["fake_id"], "position": d2["position"],
+                        "category": "couple", "status": "nuevo",
+                        "ai_score": match_pair["score"], "ai_summary": match_pair["summary"],
+                        "ai_strengths": match_pair["strengths"], "ai_gaps": match_pair["gaps"],
+                    })
+                    link_couple(id1, id2)
+                    imported += 2
         else:
             # Individual
             print(f"Individual: {f1.name}")
