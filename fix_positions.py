@@ -78,7 +78,7 @@ def detect_position(cv_text: str, bio: str, current_pos: str) -> tuple[str, str]
 def main():
     res = sb.table("candidates").select(
         "id,name,position,pdf_text,bio,ai_score"
-    ).execute()
+    ).neq("status", "spam").execute()
     rows = res.data or []
 
     # ── 1. Detectar y corregir posiciones ──────────────────────────────────
@@ -104,7 +104,7 @@ def main():
     # Reload
     res2 = sb.table("candidates").select(
         "id,name,position,pdf_text,bio,ai_score,couple_partner_id"
-    ).execute()
+    ).neq("status", "spam").execute()
     rows2 = res2.data or []
 
     # Build set of couple pairs (never dedup partners against each other)
@@ -168,7 +168,7 @@ def main():
         "k.jessy@web.de",
         # "el caldero" and "cucina vagante" → dedup by CV above handles them
     ]
-    res3 = sb.table("candidates").select("id,name").execute()
+    res3 = sb.table("candidates").select("id,name").neq("status", "spam").execute()
     for r in res3.data or []:
         name_low = r["name"].lower()
         if any(inv in name_low for inv in INVALID_NAMES):
@@ -177,7 +177,7 @@ def main():
             sb.table("candidates").delete().eq("id", r["id"]).execute()
 
     # ── 4. Resumen final ────────────────────────────────────────────────────
-    final = sb.table("candidates").select("id,name,position").execute().data or []
+    final = sb.table("candidates").select("id,name,position").neq("status", "spam").execute().data or []
     chef_n = sum(1 for r in final if r["position"] == "Chef")
     host_n = sum(1 for r in final if r["position"] == "Host")
     print(f"\n=== RESULTADO FINAL ===")

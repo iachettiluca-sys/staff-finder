@@ -428,6 +428,7 @@ async function loadCandidates() {
   var result = await supabaseClient.from('candidates')
     .select('*, notes(*)')
     .eq('search_id', currentSearchId)
+    .neq('status', 'spam')
     .order('ai_score', {ascending: false, nullsFirst: false});
   btn.disabled = false; btn.textContent = '↻ Actualizar';
   if (result.error) { showGrid([]); return; }

@@ -27,7 +27,7 @@ pos_map = {p["title"]: p for p in positions}
 
 res = sb.table("candidates").select(
     "id,name,position,category,couple_partner_id,pdf_text,bio,ai_score"
-).eq("search_id", search_id).execute()
+).eq("search_id", search_id).neq("status", "spam").execute()
 
 candidates = res.data or []
 by_id = {c["id"]: c for c in candidates}
