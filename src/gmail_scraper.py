@@ -110,7 +110,7 @@ def find_bio_for_candidate(name: str, since_date: str) -> str | None:
         _, msg_nums = mail.search(None, f'SINCE "{since_str}" SUBJECT "{first_name}"')
         if msg_nums[0]:
             for num in msg_nums[0].split()[:5]:
-                _, data = mail.fetch(num, "(RFC822)")
+                _, data = mail.fetch(num, "(BODY.PEEK[])")
                 raw = data[0][1]
                 msg = email.message_from_bytes(raw)
                 body = _get_body_text(msg)
@@ -154,17 +154,20 @@ def scrape_gmail(since_date: str, couple_keywords: list[str] = None,
         print(f"[gmail] {len(ids)} mails encontrados desde {since_str}")
 
         for num in ids:
-            _, data = mail.fetch(num, "(RFC822 UID)")
-            # Get UID
+            # UID primero — evitamos fetchear el cuerpo completo de emails ya procesados
+            import re
             _, uid_data = mail.fetch(num, "(UID)")
             uid_str = uid_data[0].decode()
-            import re
             uid_match = re.search(r"UID (\d+)", uid_str)
             message_id = uid_match.group(1) if uid_match else num.decode()
 
             if message_id in processed_ids:
                 continue
 
+            # BODY.PEEK[] no marca el mail como leído — lo hacemos manualmente si importamos
+            _, data = mail.fetch(num, "(BODY.PEEK[])")
+            if not data or not isinstance(data[0], tuple):
+                continue
             raw = data[0][1]
             msg = email.message_from_bytes(raw)
 
@@ -207,3 +210,24 @@ def scrape_gmail(since_date: str, couple_keywords: list[str] = None,
             pass
 
     return results
+
+
+def mark_messages_seen(uids: list[str]) -> None:
+    """Marca como leídos en Gmail los mails importados exitosamente (por UID)."""
+    if not uids:
+        return
+    user     = os.environ.get("GMAIL_USER")
+    app_pass = os.environ.get("GMAIL_APP_PASS")
+    if not user or not app_pass:
+        return
+    try:
+        mail = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
+        mail.login(user, app_pass)
+        mail.select("INBOX")
+        # UID STORE acepta lista separada por comas
+        uid_str = ",".join(str(u) for u in uids)
+        mail.uid("STORE", uid_str, "+FLAGS", "\\Seen")
+        mail.logout()
+        print(f"[gmail] {len(uids)} mails marcados como leídos.")
+    except Exception as e:
+        print(f"[gmail] Error marcando como leídos: {e}")

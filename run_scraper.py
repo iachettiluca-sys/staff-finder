@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
 import yaml
-from gmail_scraper import scrape_gmail
+from gmail_scraper import scrape_gmail, mark_messages_seen
 from pdf_extractor import extract_attachment_text
 from cv_matcher import match_cv
 from name_extractor import extract_name_and_position
@@ -74,6 +74,7 @@ def main() -> int:
     print(f"[scraper] Nuevos mails con CV: {len(emails)}")
 
     imported = 0
+    imported_uids: list[str] = []  # UIDs de mails importados → marcar como leídos al final
 
     for mail_data in emails:
         message_id = mail_data["message_id"]
@@ -120,6 +121,7 @@ def main() -> int:
                 "ai_gaps": match["gaps"],
             })
             imported += 1
+            imported_uids.append(message_id)
             print(f"[scraper] Candidato importado (sin CV): {sender_name} — score: {match['score']}")
             continue
 
@@ -188,6 +190,12 @@ def main() -> int:
         if len(candidate_ids) == 2:
             link_couple(candidate_ids[0], candidate_ids[1])
             print(f"[scraper] Pareja vinculada: {candidate_ids[0]} <-> {candidate_ids[1]}")
+
+        if candidate_ids:
+            imported_uids.append(message_id)
+
+    # Marcar como leídos solo los mails de los que importamos candidatos
+    mark_messages_seen(imported_uids)
 
     # Summary email
     if imported > 0:
