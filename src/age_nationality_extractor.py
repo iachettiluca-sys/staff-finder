@@ -78,6 +78,11 @@ TEXTO DEL CANDIDATO:
             if block.type == "tool_use":
                 age = block.input.get("age")
                 nat = block.input.get("nationality")
+                # Ignorar strings "null" que a veces devuelve el modelo
+                if isinstance(age, str) and age.lower() == "null":
+                    age = None
+                if isinstance(nat, str) and nat.lower() == "null":
+                    nat = None
                 # Validar: edad entre 16 y 80, nacionalidad 2 letras
                 if age is not None and not (16 <= int(age) <= 80):
                     age = None
