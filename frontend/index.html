@@ -865,9 +865,12 @@ document.getElementById('btnSearch').addEventListener('click', async function() 
       return;
     }
 
+    console.log('[adhoc-search] respuesta completa:', JSON.stringify(result));
+
     var results = (result.data && result.data.results) || [];
     if (!results.length) {
-      listEl.innerHTML = '<div class="searchEmpty">No se encontraron candidatos para este puesto.</div>';
+      var debugInfo = JSON.stringify(result.data || result.error || 'null');
+      listEl.innerHTML = '<div class="searchEmpty">No se encontraron candidatos.<br><small style="color:var(--muted);font-size:.72rem;word-break:break-all">Debug: ' + escapeHtml(debugInfo.slice(0, 300)) + '</small></div>';
       return;
     }
 
