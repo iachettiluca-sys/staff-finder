@@ -10,7 +10,23 @@ from bs4 import BeautifulSoup
 IMAP_HOST = "imap.gmail.com"
 IMAP_PORT = 993
 
-CV_KEYWORDS = ["cv", "curriculum", "candidat", "postul", "aplico", "applying", "application"]
+CV_KEYWORDS = [
+    # Términos genéricos de postulación
+    "cv", "curriculum", "candidat", "postul", "aplico", "applying", "application",
+    "me presento", "me postulo", "interesado", "interesada", "disponible",
+    "adjunto mi", "adjunto el cv", "envío mi", "envio mi", "mando mi",
+    "busco trabajo", "busco empleo", "en busca de",
+    # Puestos de gastronomía y lodge
+    "chef", "cocinero", "cocinera", "cocina", "gastronomia", "gastronomía",
+    "host", "hostess", "mozo", "moza", "camarero", "camarera", "mesero", "mesera",
+    "bartender", "barman", "sommelier",
+    "recepcionista", "recepcion", "recepción", "conserje",
+    "limpieza", "mucama", "mantenimiento", "handyman",
+    "temporada", "temporario", "temporal", "estacional",
+    # Contexto geográfico / sector
+    "patagonia", "lodge", "bariloche", "turismo", "hoteleria", "hotelería",
+    "hospitalidad", "hospitality",
+]
 ATTACHMENT_EXTS = (".pdf", ".doc", ".docx")
 
 
@@ -70,12 +86,13 @@ def _get_attachments(msg) -> list[dict]:
 
 
 def _is_cv_email(subject: str, body: str, has_attachment: bool) -> bool:
-    # Si tiene adjunto PDF/DOCX → siempre es un CV, sin importar el asunto
+    text = (subject + " " + body[:800]).lower()
+    has_keyword = any(kw in text for kw in CV_KEYWORDS)
     if has_attachment:
-        return True
-    # Sin adjunto: solo importar si hay keywords de postulación en el asunto o cuerpo
-    text = (subject + " " + body[:500]).lower()
-    return any(kw in text for kw in CV_KEYWORDS)
+        # Adjunto PDF/DOCX + al menos una keyword → CV seguro
+        return has_keyword
+    # Sin adjunto: requiere keywords fuertes en el cuerpo
+    return has_keyword
 
 
 def _detect_position(subject: str, body: str) -> str:
