@@ -18,6 +18,7 @@ from gmail_scraper import scrape_gmail, mark_messages_seen
 from pdf_extractor import extract_attachment_text
 from cv_matcher import match_cv
 from name_extractor import extract_name_and_position
+from age_nationality_extractor import extract_age_nationality
 from supabase_ops import (
     get_or_create_search, get_processed_message_ids,
     ensure_positions, upload_pdf, create_candidate, link_couple,
@@ -104,6 +105,7 @@ def main() -> int:
             pdf_url = ""
             cv_text = ""
             match = match_cv(cv_text, body, sender_name, pos_title, pos_requirements)
+            profile = extract_age_nationality(cv_text, body)
             candidate_id = create_candidate({
                 "search_id": search_id,
                 "name": sender_name,
@@ -119,6 +121,8 @@ def main() -> int:
                 "ai_summary": match["summary"],
                 "ai_strengths": match["strengths"],
                 "ai_gaps": match["gaps"],
+                "age": profile.get("age"),
+                "nationality": profile.get("nationality"),
             })
             imported += 1
             imported_uids.append(message_id)
@@ -166,6 +170,7 @@ def main() -> int:
                 partner_name=partner_name,
                 partner_cv_text=partner_cv,
             )
+            profile = extract_age_nationality(ad["cv_text"], body if i == 0 else "")
 
             candidate_id = create_candidate({
                 "search_id": search_id,
@@ -182,6 +187,8 @@ def main() -> int:
                 "ai_summary": match["summary"],
                 "ai_strengths": match["strengths"],
                 "ai_gaps": match["gaps"],
+                "age": profile.get("age"),
+                "nationality": profile.get("nationality"),
             })
             candidate_ids.append(candidate_id)
             imported += 1

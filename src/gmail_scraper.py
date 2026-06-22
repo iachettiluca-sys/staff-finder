@@ -70,9 +70,12 @@ def _get_attachments(msg) -> list[dict]:
 
 
 def _is_cv_email(subject: str, body: str, has_attachment: bool) -> bool:
+    # Si tiene adjunto PDF/DOCX → siempre es un CV, sin importar el asunto
+    if has_attachment:
+        return True
+    # Sin adjunto: solo importar si hay keywords de postulación en el asunto o cuerpo
     text = (subject + " " + body[:500]).lower()
-    has_keyword = any(kw in text for kw in CV_KEYWORDS)
-    return has_attachment and has_keyword or (has_keyword and not has_attachment)
+    return any(kw in text for kw in CV_KEYWORDS)
 
 
 def _detect_position(subject: str, body: str) -> str:

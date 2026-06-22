@@ -96,6 +96,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .btnVerPerfil{margin-top:.2rem;padding:.45rem .9rem;background:var(--primary);color:#fff;border:none;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer;align-self:flex-start;transition:opacity .15s}
 .btnVerPerfil:hover{opacity:.84}
 
+.scoreWrap{display:flex;flex-direction:column;align-items:center;gap:.15rem;flex-shrink:0}
+.ageLabel{font-size:.68rem;font-weight:600;color:var(--muted);white-space:nowrap}
+.badge-nat{background:#F0FDF4;color:#166534;font-size:.72rem}
+
 .skeleton{background:#E2E8F0;border-radius:6px;animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .skCard{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);padding:1.15rem;display:flex;flex-direction:column;gap:.75rem}
@@ -416,6 +420,29 @@ function fmtDate(iso) {
   if (!iso) return '';
   return new Date(iso).toLocaleDateString('es-AR', {day:'2-digit', month:'short', year:'numeric'});
 }
+function countryFlag(iso2) {
+  if (!iso2 || iso2.length < 2) return '';
+  var a = iso2.toUpperCase().charCodeAt(0) - 65 + 0x1F1E6;
+  var b = iso2.toUpperCase().charCodeAt(1) - 65 + 0x1F1E6;
+  return String.fromCodePoint(a, b);
+}
+var NAT3 = {
+  'AR':'ARG','CL':'CHI','UY':'URU','BR':'BRA','PY':'PAR','BO':'BOL','PE':'PER',
+  'EC':'ECU','CO':'COL','VE':'VEN','MX':'MEX','US':'USA','CA':'CAN','GB':'GBR',
+  'FR':'FRA','ES':'ESP','IT':'ITA','DE':'ALE','PT':'POR','NL':'HOL','BE':'BEL',
+  'CH':'SUI','AT':'AUT','SE':'SUE','NO':'NOR','DK':'DIN','FI':'FIN','PL':'POL',
+  'CZ':'CHE','HU':'HUN','RO':'RUM','HR':'CRO','RS':'SER','ZA':'RSA','AU':'AUS',
+  'NZ':'NZL','JP':'JPN','CN':'CHN','IN':'IND','RU':'RUS','UA':'UCR','TR':'TUR',
+  'IL':'ISR','ZW':'ZIM','KE':'KEN','NG':'NIG','GH':'GHA','MA':'MAR','NA':'NAM',
+};
+function nat3(iso2) {
+  if (!iso2) return '';
+  return NAT3[iso2.toUpperCase()] || iso2.toUpperCase().slice(0, 3);
+}
+function natBadge(iso2) {
+  if (!iso2) return '';
+  return '<span class="badge badge-nat">' + countryFlag(iso2) + ' ' + nat3(iso2) + '</span>';
+}
 
 // AUTH
 document.getElementById('btnLogin').addEventListener('click', async function() {
@@ -582,6 +609,8 @@ function coupleCardHTML(c1, c2) {
   var firstName1 = (c1.name || '').split(' ')[0] || 'Ver';
   var firstName2 = (c2.name || '').split(' ')[0] || 'Ver';
   var summary = c1.ai_summary ? '<div class="cardSummary">' + c1.ai_summary + '</div>' : '';
+  var age1 = c1.age ? c1.age + ' años' : '';
+  var age2 = c2.age ? c2.age + ' años' : '';
   return '<div class="cCard coupleCard' + (isDisc ? ' descartado' : '') + '">' +
     '<div class="coupleTop">' +
       '<div class="coupledMembers">' +
@@ -589,7 +618,11 @@ function coupleCardHTML(c1, c2) {
           '<div class="avatar" style="background:' + avatarColor(c1.position) + '">' + initials(c1.name) + '</div>' +
           '<div class="memberInfo">' +
             '<span class="candidateName">' + c1.name + '</span>' +
-            '<span class="badge badge-' + (c1.position || 'unknown') + '">' + posLabel(c1.position) + '</span>' +
+            '<div style="display:flex;gap:.3rem;flex-wrap:wrap;align-items:center">' +
+              '<span class="badge badge-' + (c1.position || 'unknown') + '">' + posLabel(c1.position) + '</span>' +
+              natBadge(c1.nationality) +
+              (age1 ? '<span class="ageLabel">' + age1 + '</span>' : '') +
+            '</div>' +
           '</div>' +
         '</div>' +
         '<div class="coupleJoiner">&#8651;</div>' +
@@ -597,11 +630,17 @@ function coupleCardHTML(c1, c2) {
           '<div class="avatar" style="background:' + avatarColor(c2.position) + '">' + initials(c2.name) + '</div>' +
           '<div class="memberInfo">' +
             '<span class="candidateName">' + c2.name + '</span>' +
-            '<span class="badge badge-' + (c2.position || 'unknown') + '">' + posLabel(c2.position) + '</span>' +
+            '<div style="display:flex;gap:.3rem;flex-wrap:wrap;align-items:center">' +
+              '<span class="badge badge-' + (c2.position || 'unknown') + '">' + posLabel(c2.position) + '</span>' +
+              natBadge(c2.nationality) +
+              (age2 ? '<span class="ageLabel">' + age2 + '</span>' : '') +
+            '</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
-      '<div class="scoreBadge" style="background:' + scoreColor(avgScore) + '">' + (avgScore !== null ? avgScore : '-') + '</div>' +
+      '<div class="scoreWrap">' +
+        '<div class="scoreBadge" style="background:' + scoreColor(avgScore) + '">' + (avgScore !== null ? avgScore : '-') + '</div>' +
+      '</div>' +
     '</div>' +
     '<div class="badgesRow">' +
       '<span class="badge badge-couple">&#8651; Pareja</span>' +
@@ -620,16 +659,21 @@ function cardHTML(c) {
   var isDisc = c.status === 'descartado';
   var coupleTag = c.category === 'couple' ? '<span class="badge badge-couple">&#8651; Pareja</span>' : '';
   var summary = c.ai_summary ? '<div class="cardSummary">' + c.ai_summary + '</div>' : '';
+  var ageStr = c.age ? c.age + ' años' : '';
   return '<div class="cCard' + (isDisc ? ' descartado' : '') + '" data-id="' + c.id + '">' +
     '<div class="cardTop">' +
       '<div class="avatarWrap">' +
         '<div class="avatar" style="background:' + avatarColor(c.position) + '">' + initials(c.name) + '</div>' +
         '<span class="candidateName">' + c.name + '</span>' +
       '</div>' +
-      '<div class="scoreBadge" style="background:' + scoreColor(sn) + '">' + (sn !== null ? sn : '-') + '</div>' +
+      '<div class="scoreWrap">' +
+        '<div class="scoreBadge" style="background:' + scoreColor(sn) + '">' + (sn !== null ? sn : '-') + '</div>' +
+        (ageStr ? '<div class="ageLabel">' + ageStr + '</div>' : '') +
+      '</div>' +
     '</div>' +
     '<div class="badgesRow">' +
       '<span class="badge badge-' + (c.position || 'unknown') + '">' + posLabel(c.position) + '</span>' +
+      natBadge(c.nationality) +
       coupleTag +
       '<span class="badge badge-' + (c.status || 'nuevo') + '">' + statusLabel(c.status) + '</span>' +
     '</div>' +
