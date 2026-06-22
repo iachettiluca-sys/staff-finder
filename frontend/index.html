@@ -855,7 +855,13 @@ document.getElementById('btnSearch').addEventListener('click', async function() 
     });
 
     if (result.error) {
-      listEl.innerHTML = '<div class="searchEmpty" style="color:var(--danger)">Error: ' + (result.error.message || result.error) + '</div>';
+      listEl.innerHTML = '<div class="searchEmpty" style="color:var(--danger)">Error de red: ' + (result.error.message || result.error) + '</div>';
+      return;
+    }
+
+    // La función siempre devuelve 200; errores internos vienen en result.data.error
+    if (result.data && result.data.error) {
+      listEl.innerHTML = '<div class="searchEmpty" style="color:var(--danger)">' + escapeHtml(result.data.error) + '</div>';
       return;
     }
 
