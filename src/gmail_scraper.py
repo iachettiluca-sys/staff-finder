@@ -11,20 +11,16 @@ IMAP_HOST = "imap.gmail.com"
 IMAP_PORT = 993
 
 CV_KEYWORDS = [
-    # Términos genéricos de postulación
+    # Postulación explícita
     "cv", "curriculum", "candidat", "postul", "aplico", "applying", "application",
-    "me presento", "me postulo", "interesado", "interesada", "disponible",
-    "adjunto mi", "adjunto el cv", "envío mi", "envio mi", "mando mi",
-    "busco trabajo", "busco empleo", "en busca de",
-    # Puestos de gastronomía y lodge
-    "chef", "cocinero", "cocinera", "cocina", "gastronomia", "gastronomía",
-    "host", "hostess", "mozo", "moza", "camarero", "camarera", "mesero", "mesera",
-    "bartender", "barman", "sommelier",
-    "recepcionista", "recepcion", "recepción", "conserje",
-    "limpieza", "mucama", "mantenimiento", "handyman",
-    "temporada", "temporario", "temporal", "estacional",
-    # Contexto geográfico / sector
-    "patagonia", "lodge", "bariloche", "turismo", "hoteleria", "hotelería",
+    "me presento", "me postulo", "busco trabajo", "busco empleo",
+    "adjunto mi cv", "adjunto el cv", "adjunto curriculum",
+    # Puestos específicos
+    "chef", "cocinero", "cocinera", "hostess", "mozo", "moza",
+    "camarero", "camarera", "mesero", "mesera",
+    "bartender", "barman", "sommelier", "mucama", "handyman",
+    # Contexto lodge / temporada
+    "patagonia", "lodge", "bariloche", "temporada", "hoteleria", "hotelería",
     "hospitalidad", "hospitality",
 ]
 ATTACHMENT_EXTS = (".pdf", ".doc", ".docx")
