@@ -257,6 +257,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
       <input type="range" id="fScore" min="0" max="100" value="0">
       <span id="fScoreVal">0</span>
     </div>
+    <select id="fNat">
+      <option value="">Todas las nac.</option>
+    </select>
     <input type="text" id="fName" placeholder="Buscar por nombre..." style="min-width:160px">
     <button class="btnReload" id="btnReload">&#8635; Actualizar</button>
     <button class="btnUpload" id="btnUpload">&#8679; Subir CVs</button>
@@ -514,12 +517,13 @@ async function loadCandidates() {
   var active = data.filter(function(c){ return c.status !== 'descartado'; });
   var disc   = data.filter(function(c){ return c.status === 'descartado'; });
   allCandidates = active.concat(disc);
+  populateNatFilter(allCandidates);
   applyFilters();
 }
 
 document.getElementById('btnReload').addEventListener('click', loadCandidates);
 
-['fPosition','fCategory','fStatus','fName'].forEach(function(id) {
+['fPosition','fCategory','fStatus','fName','fNat'].forEach(function(id) {
   document.getElementById(id).addEventListener('input', applyFilters);
 });
 document.getElementById('fScore').addEventListener('input', function(e) {
@@ -527,16 +531,35 @@ document.getElementById('fScore').addEventListener('input', function(e) {
   applyFilters();
 });
 
+function populateNatFilter(candidates) {
+  var sel = document.getElementById('fNat');
+  var current = sel.value;
+  var nats = {};
+  candidates.forEach(function(c) { if (c.nationality) nats[c.nationality] = true; });
+  var sorted = Object.keys(nats).sort();
+  // Reconstruir opciones
+  sel.innerHTML = '<option value="">Todas las nac.</option>';
+  sorted.forEach(function(iso2) {
+    var opt = document.createElement('option');
+    opt.value = iso2;
+    opt.textContent = countryFlag(iso2) + ' ' + nat3(iso2);
+    sel.appendChild(opt);
+  });
+  if (current) sel.value = current;
+}
+
 function applyFilters() {
   var pos   = document.getElementById('fPosition').value;
   var cat   = document.getElementById('fCategory').value;
   var sta   = document.getElementById('fStatus').value;
+  var natF  = document.getElementById('fNat').value;
   var minSc = parseInt(document.getElementById('fScore').value || '0');
   var nameQ = document.getElementById('fName').value.toLowerCase();
   var filtered = allCandidates.filter(function(c) {
     if (pos && c.position !== pos) return false;
     if (cat && c.category !== cat) return false;
     if (sta && c.status !== sta)   return false;
+    if (natF && c.nationality !== natF) return false;
     if (c.ai_score !== null && c.ai_score !== undefined && c.ai_score < minSc) return false;
     if (nameQ && c.name.toLowerCase().indexOf(nameQ) === -1) return false;
     return true;
