@@ -95,6 +95,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .cardSummary{font-size:.82rem;color:var(--muted);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .btnVerPerfil{margin-top:.2rem;padding:.45rem .9rem;background:var(--primary);color:#fff;border:none;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer;align-self:flex-start;transition:opacity .15s}
 .btnVerPerfil:hover{opacity:.84}
+.btnDelete{position:absolute;top:.6rem;right:.6rem;background:none;border:none;cursor:pointer;color:#CBD5E1;font-size:1rem;padding:.2rem;line-height:1;border-radius:4px;transition:color .15s}
+.btnDelete:hover{color:var(--danger)}
 
 .scoreWrap{display:flex;flex-direction:column;align-items:center;gap:.15rem;flex-shrink:0}
 .ageLabel{font-size:.68rem;font-weight:600;color:var(--muted);white-space:nowrap}
@@ -622,6 +624,21 @@ function showGrid(candidates) {
   grid.querySelectorAll('.btnVerPerfil').forEach(function(btn) {
     btn.addEventListener('click', function(){ openDetail(btn.dataset.id); });
   });
+  grid.querySelectorAll('.btnDelete').forEach(function(btn) {
+    btn.addEventListener('click', async function(e) {
+      e.stopPropagation();
+      var name = btn.closest('.cCard').querySelector('.candidateName');
+      var label = name ? name.textContent : 'este candidato';
+      if (!confirm('¿Eliminar a ' + label + '?')) return;
+      var ids = [btn.dataset.id];
+      if (btn.dataset.partnerId) ids.push(btn.dataset.partnerId);
+      for (var id of ids) {
+        await supabaseClient.from('candidates').update({ status: 'spam' }).eq('id', id);
+        allCandidates = allCandidates.filter(function(c){ return c.id !== id; });
+      }
+      applyFilters();
+    });
+  });
 }
 
 function coupleCardHTML(c1, c2) {
@@ -674,6 +691,7 @@ function coupleCardHTML(c1, c2) {
       '<button class="btnVerPerfil" data-id="' + c1.id + '">Ver ' + firstName1 + '</button>' +
       '<button class="btnVerPerfil" data-id="' + c2.id + '">Ver ' + firstName2 + '</button>' +
     '</div>' +
+    '<button class="btnDelete" data-id="' + c1.id + '" data-partner-id="' + c2.id + '" title="Eliminar pareja">🗑</button>' +
   '</div>';
 }
 
@@ -702,6 +720,7 @@ function cardHTML(c) {
     '</div>' +
     summary +
     '<button class="btnVerPerfil" data-id="' + c.id + '">Ver perfil</button>' +
+    '<button class="btnDelete" data-id="' + c.id + '" title="Eliminar">🗑</button>' +
   '</div>';
 }
 
