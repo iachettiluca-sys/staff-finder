@@ -13,12 +13,14 @@ IMAP_PORT = 993
 CV_KEYWORDS = [
     # Postulación explícita
     "cv", "curriculum", "candidat", "postul", "aplico", "applying", "application",
-    "me presento", "me postulo", "busco trabajo", "busco empleo",
-    "adjunto mi cv", "adjunto el cv", "adjunto curriculum",
+    "me presento", "me postulo", "busco trabajo", "busco empleo", "busqueda de empleo",
+    "búsqueda de empleo", "adjunto mi cv", "adjunto el cv", "adjunto curriculum",
+    "job application", "vacancy", "position", "seeking",
     # Puestos específicos
     "chef", "cocinero", "cocinera", "hostess", "mozo", "moza",
     "camarero", "camarera", "mesero", "mesera",
     "bartender", "barman", "sommelier", "mucama", "handyman",
+    "cook", "steward", "stewardess", "waiter", "waitress",
     # Contexto lodge / temporada
     "patagonia", "lodge", "bariloche", "temporada", "hoteleria", "hotelería",
     "hospitalidad", "hospitality",
