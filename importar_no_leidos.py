@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-importar_no_leidos.py — Procesa todos los mails NO LEÍDOS con adjunto PDF/DOCX.
-Usa Claude para clasificar si es un CV para el lodge o no (sin keywords hardcodeadas).
-Importa los que son CVs y los marca como leídos.
+importar_no_leidos.py — Procesa todos los mails desde el 22/06 (leídos y no leídos).
+Usa Claude para clasificar si es un CV para el lodge o no.
+A prueba de balas: cada mail se procesa de forma independiente, errores no frenan el run.
 """
-import sys, imaplib, email as emaillib, os, time, json
+import sys, imaplib, email as emaillib, os, time, json, re, datetime
 from pathlib import Path
 root = Path(__file__).resolve().parent
 sys.path.insert(0, str(root / "src"))
@@ -21,12 +21,19 @@ from cv_matcher import match_cv
 from age_nationality_extractor import extract_age_nationality
 from supabase_ops import (
     get_or_create_search, get_processed_message_ids,
-    ensure_positions, upload_pdf, create_candidate, link_couple, get_client,
+    ensure_positions, upload_pdf, create_candidate, link_couple,
 )
 
 ATTACHMENT_EXTS = (".pdf", ".doc", ".docx")
+SINCE_DATE = datetime.date(2026, 6, 22)
+IMAP_TIMEOUT = 30
 
-_anthropic = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+_anthropic_client = None
+def get_anthropic():
+    global _anthropic_client
+    if _anthropic_client is None:
+        _anthropic_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    return _anthropic_client
 
 
 def decode_str(v):
@@ -37,136 +44,130 @@ def decode_str(v):
 
 def get_body(msg):
     body = ""
-    for part in msg.walk():
-        ct = part.get_content_type()
-        if "attachment" in str(part.get("Content-Disposition", "")): continue
-        if ct == "text/plain":
-            p = part.get_payload(decode=True)
-            if p: body += p.decode(part.get_content_charset() or "utf-8", errors="replace")
-        elif ct == "text/html" and not body:
-            p = part.get_payload(decode=True)
-            if p:
-                body += BeautifulSoup(p.decode(part.get_content_charset() or "utf-8", errors="replace"), "html.parser").get_text()
+    try:
+        for part in msg.walk():
+            ct = part.get_content_type()
+            if "attachment" in str(part.get("Content-Disposition", "")): continue
+            if ct == "text/plain":
+                p = part.get_payload(decode=True)
+                if p: body += p.decode(part.get_content_charset() or "utf-8", errors="replace")
+            elif ct == "text/html" and not body:
+                p = part.get_payload(decode=True)
+                if p:
+                    body += BeautifulSoup(p.decode(part.get_content_charset() or "utf-8", errors="replace"), "html.parser").get_text()
+    except Exception:
+        pass
     return body.strip()
 
 
 def get_attachments(msg):
     atts = []
-    for part in msg.walk():
-        fn = part.get_filename()
-        if not fn: continue
-        fn = decode_str(fn)
-        if any(fn.lower().endswith(ext) for ext in ATTACHMENT_EXTS):
-            p = part.get_payload(decode=True)
-            if p: atts.append({"filename": fn, "bytes": p})
+    try:
+        for part in msg.walk():
+            fn = part.get_filename()
+            if not fn: continue
+            fn = decode_str(fn)
+            if any(fn.lower().endswith(ext) for ext in ATTACHMENT_EXTS):
+                p = part.get_payload(decode=True)
+                if p: atts.append({"filename": fn, "bytes": p})
+    except Exception:
+        pass
     return atts
 
 
 def is_cv_email(sender, subject, body) -> bool:
-    """Claude clasifica si el mail es una postulación laboral para el lodge."""
-    prompt = f"""Sos asistente de RRHH de un lodge de pesca de lujo en la Patagonia argentina (Arroyo Pescado Lodge).
-Estamos buscando candidatos para dos puestos: Chef y Host/Hostess.
+    prompt = f"""Sos asistente de RRHH de Arroyo Pescado Lodge, un lodge de pesca de lujo en la Patagonia argentina.
+Estamos buscando candidatos para dos puestos: Chef y Host/Hostess para la temporada nov 2026 - abr 2027.
 
-Analizá este mail y respondé SOLO con "SI" si es una postulación laboral o envío de CV, o "NO" si no lo es.
+Analizá este mail y respondé SOLO con "SI" si es una postulación laboral, envío de CV o aplicación a un puesto de trabajo.
+Respondé "NO" si es cualquier otra cosa (factura, reserva, comunicado, publicidad, etc).
 
 De: {sender}
 Asunto: {subject}
-Cuerpo (primeros 400 caracteres): {body[:400]}
+Cuerpo: {body[:500]}
 
-¿Es una postulación laboral o CV?"""
+¿Es una postulación o CV?"""
+    for attempt in range(3):
+        try:
+            resp = get_anthropic().messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=5,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return resp.content[0].text.strip().upper().startswith("S")
+        except Exception as e:
+            if attempt == 2:
+                print(f"[clasificador] Error tras 3 intentos: {e}")
+                return False
+            time.sleep(2)
+    return False
 
-    try:
-        resp = _anthropic.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=5,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        answer = resp.content[0].text.strip().upper()
-        return answer.startswith("S")
-    except Exception as e:
-        print(f"[clasificador] Error: {e}")
-        return False
 
-
-def main():
-    cfg = yaml.safe_load((root / "config.yaml").read_text(encoding="utf-8"))
-    search_cfg = cfg["search"]
-    positions_cfg = cfg["positions"]
-    couple_keywords = cfg.get("couple_keywords", [])
-
-    search_id = get_or_create_search(search_cfg["name"], search_cfg["company"])
-    positions = ensure_positions(search_id, positions_cfg)
-    pos_map = {p["title"]: p for p in positions}
-    processed_ids = get_processed_message_ids(search_id)
-
-    user     = os.environ["GMAIL_USER"]
-    app_pass = os.environ["GMAIL_APP_PASS"]
-
+def connect_imap(user, app_pass):
     mail = imaplib.IMAP4_SSL("imap.gmail.com", 993)
+    mail.socket().settimeout(IMAP_TIMEOUT)
     mail.login(user, app_pass)
     mail.select("INBOX")
+    return mail
 
-    # Buscar TODOS los no leídos
-    _, nums = mail.search(None, "UNSEEN")
-    ids = nums[0].split() if nums[0] else []
-    print(f"{len(ids)} mails no leídos en INBOX\n")
 
-    imported = 0
-    skipped_noatt = 0
-    skipped_nocv = 0
-    imported_uids = []
-
-    for num in ids:
-        # Obtener UID
-        import re
+def process_email(num, mail, user, search_id, positions, processed_ids):
+    """Procesa un mail. Retorna (uid, candidate_ids) o (uid, []) si no se importó."""
+    # UID
+    try:
         _, uid_data = mail.fetch(num, "(UID)")
         uid_match = re.search(r"UID (\d+)", uid_data[0].decode())
         uid = uid_match.group(1) if uid_match else num.decode()
+    except Exception:
+        uid = num.decode()
 
-        if uid in processed_ids:
-            continue
+    if uid in processed_ids:
+        return uid, None  # None = ya procesado, saltar silenciosamente
 
+    try:
         _, data = mail.fetch(num, "(BODY.PEEK[])")
-        if not data or not isinstance(data[0], tuple): continue
+        if not data or not isinstance(data[0], tuple):
+            return uid, []
         msg = emaillib.message_from_bytes(data[0][1])
+    except Exception as e:
+        print(f"  [error fetch] {e}")
+        return uid, []
 
+    try:
         sender_name, sender_email = parseaddr(msg.get("From", ""))
         sender_name = decode_str(sender_name) or sender_email
-        if sender_email.lower() == user.lower(): continue
+        if sender_email.lower() == user.lower():
+            return uid, None
 
         subject = decode_str(msg.get("Subject", ""))
         body = get_body(msg)
         atts = get_attachments(msg)
 
         if not atts:
-            skipped_noatt += 1
-            continue
+            return uid, []
 
-        print(f"→ {sender_name} | {subject[:50]}", end=" ... ", flush=True)
+        print(f"  {sender_name[:30]} | {subject[:45]}", end=" ... ", flush=True)
 
-        # Claude clasifica
         if not is_cv_email(sender_name, subject, body):
             print("NO es CV")
-            skipped_nocv += 1
-            continue
+            return uid, []
 
-        print("ES CV — importando")
+        print("ES CV")
 
-        # Importar (misma lógica que run_scraper.py)
-        first_cv_text = extract_attachment_text(atts[0]["filename"], atts[0]["bytes"])
-        info = extract_name_and_position(first_cv_text, body, sender_name)
-        name = info["full_name"]
-        position_detected = info["position"]
-
-        pos_cfg = next((p for p in positions if p["title"] == position_detected), positions[0])
-
+        # Extraer y procesar adjuntos
         atts_data = []
         for att in atts[:2]:
-            cv_text = extract_attachment_text(att["filename"], att["bytes"])
-            att_info = extract_name_and_position(cv_text, body if not atts_data else "", sender_name)
-            atts_data.append({"att": att, "cv_text": cv_text, "name": att_info["full_name"], "pos": att_info["position"]})
+            try:
+                cv_text = extract_attachment_text(att["filename"], att["bytes"])
+                att_info = extract_name_and_position(cv_text, body if not atts_data else "", sender_name)
+                atts_data.append({"att": att, "cv_text": cv_text, "name": att_info["full_name"], "pos": att_info["position"]})
+            except Exception as e:
+                print(f"  [error extracción] {e}")
 
-        # Mismo nombre = CV + carta, no pareja
+        if not atts_data:
+            return uid, []
+
+        # Mismo nombre = CV + carta
         actually_couple = False
         if len(atts_data) == 2:
             if atts_data[0]["name"].strip().lower() == atts_data[1]["name"].strip().lower():
@@ -174,69 +175,120 @@ def main():
             else:
                 actually_couple = True
 
+        pos_cfg = next((p for p in positions if p["title"] == atts_data[0]["pos"]), positions[0])
         candidate_ids = []
+
         for i, ad in enumerate(atts_data):
-            final_pos = next((p for p in positions if p["title"] == ad["pos"]), pos_cfg)
-            partner_name = atts_data[1-i]["name"] if actually_couple else ""
-            partner_cv   = atts_data[1-i]["cv_text"] if actually_couple else ""
+            try:
+                final_pos = next((p for p in positions if p["title"] == ad["pos"]), pos_cfg)
+                partner_name = atts_data[1-i]["name"] if actually_couple else ""
+                partner_cv   = atts_data[1-i]["cv_text"] if actually_couple else ""
 
-            match = match_cv(
-                cv_text=ad["cv_text"], bio=body if i == 0 else "",
-                candidate_name=ad["name"],
-                position_title=final_pos["title"],
-                position_requirements=final_pos["requirements"],
-                is_couple=actually_couple,
-                partner_name=partner_name,
-                partner_cv_text=partner_cv,
-            )
-            profile = extract_age_nationality(ad["cv_text"], body if i == 0 else "")
-            pdf_url = upload_pdf(search_id, f"{uid}_{i}_{ad['att']['filename']}", ad["att"]["bytes"])
+                match = match_cv(
+                    cv_text=ad["cv_text"], bio=body if i == 0 else "",
+                    candidate_name=ad["name"],
+                    position_title=final_pos["title"],
+                    position_requirements=final_pos["requirements"],
+                    is_couple=actually_couple,
+                    partner_name=partner_name, partner_cv_text=partner_cv,
+                )
+                profile = extract_age_nationality(ad["cv_text"], body if i == 0 else "")
+                pdf_url = upload_pdf(search_id, f"{uid}_{i}_{ad['att']['filename']}", ad["att"]["bytes"])
 
-            cid = create_candidate({
-                "search_id": search_id,
-                "name": ad["name"],
-                "email": sender_email if i == 0 else "",
-                "bio": body if i == 0 else "",
-                "pdf_url": pdf_url,
-                "pdf_text": ad["cv_text"],
-                "gmail_message_id": uid if i == 0 else f"{uid}_p2",
-                "position": final_pos["title"],
-                "category": "couple" if actually_couple else "solo",
-                "status": "nuevo",
-                "ai_score": match["score"],
-                "ai_summary": match["summary"],
-                "ai_strengths": match["strengths"],
-                "ai_gaps": match["gaps"],
-                "age": profile.get("age"),
-                "nationality": profile.get("nationality"),
-            })
-            candidate_ids.append(cid)
-            imported += 1
-            print(f"  [{ad['name']}] score {match['score']}")
+                cid = create_candidate({
+                    "search_id": search_id,
+                    "name": ad["name"],
+                    "email": sender_email if i == 0 else "",
+                    "bio": body if i == 0 else "",
+                    "pdf_url": pdf_url,
+                    "pdf_text": ad["cv_text"],
+                    "gmail_message_id": uid if i == 0 else f"{uid}_p2",
+                    "position": final_pos["title"],
+                    "category": "couple" if actually_couple else "solo",
+                    "status": "nuevo",
+                    "ai_score": match["score"],
+                    "ai_summary": match["summary"],
+                    "ai_strengths": match["strengths"],
+                    "ai_gaps": match["gaps"],
+                    "age": profile.get("age"),
+                    "nationality": profile.get("nationality"),
+                })
+                candidate_ids.append(cid)
+                print(f"  → {ad['name']} ({final_pos['title']}) score {match['score']}")
+            except Exception as e:
+                print(f"  [error importando {ad['name']}] {e}")
 
         if len(candidate_ids) == 2:
-            link_couple(candidate_ids[0], candidate_ids[1])
+            try:
+                link_couple(candidate_ids[0], candidate_ids[1])
+            except Exception as e:
+                print(f"  [error vinculando pareja] {e}")
 
+        return uid, candidate_ids
+
+    except Exception as e:
+        print(f"  [error general] {e}")
+        return uid, []
+
+
+def main():
+    cfg = yaml.safe_load((root / "config.yaml").read_text(encoding="utf-8"))
+    search_id = get_or_create_search(cfg["search"]["name"], cfg["search"]["company"])
+    positions = ensure_positions(search_id, cfg["positions"])
+    processed_ids = get_processed_message_ids(search_id)
+
+    user     = os.environ["GMAIL_USER"]
+    app_pass = os.environ["GMAIL_APP_PASS"]
+
+    mail = connect_imap(user, app_pass)
+    since_str = SINCE_DATE.strftime("%d-%b-%Y")
+    _, nums = mail.search(None, f'SINCE "{since_str}"')
+    ids = nums[0].split() if nums[0] else []
+    print(f"{len(ids)} mails desde {since_str} (leídos y no leídos)\n")
+
+    imported = 0
+    imported_uids = []
+
+    for i, num in enumerate(ids, 1):
+        # Reconectar IMAP si cayó
+        try:
+            mail.noop()
+        except Exception:
+            try:
+                mail = connect_imap(user, app_pass)
+            except Exception as e:
+                print(f"[IMAP] No se pudo reconectar: {e}")
+                time.sleep(5)
+                continue
+
+        print(f"[{i}/{len(ids)}]", end=" ")
+        uid, candidate_ids = process_email(num, mail, user, search_id, positions, processed_ids)
+
+        if candidate_ids is None:
+            print(f"  (ya procesado)")
+            continue
         if candidate_ids:
+            imported += len(candidate_ids)
             imported_uids.append(uid)
+            processed_ids.add(uid)
 
-        time.sleep(0.3)
+        time.sleep(0.2)
 
     # Marcar como leídos
     if imported_uids:
-        uid_str = ",".join(imported_uids)
         try:
-            mail.uid("STORE", uid_str, "+FLAGS", "\\Seen")
+            mail.uid("STORE", ",".join(imported_uids), "+FLAGS", "\\Seen")
             print(f"\n{len(imported_uids)} mails marcados como leídos.")
         except Exception as e:
-            print(f"\nError marcando como leídos: {e}")
+            print(f"\nError marcando leídos: {e}")
 
-    mail.logout()
+    try:
+        mail.logout()
+    except Exception:
+        pass
 
     print(f"\n{'='*50}")
-    print(f"Importados:        {imported} candidatos")
-    print(f"Sin adjunto:       {skipped_noatt}")
-    print(f"No son CVs:        {skipped_nocv}")
+    print(f"Candidatos importados: {imported}")
 
 
 if __name__ == "__main__":
