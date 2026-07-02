@@ -16,6 +16,7 @@ CV_KEYWORDS = [
     "me presento", "me postulo", "busco trabajo", "busco empleo", "busqueda de empleo",
     "búsqueda de empleo", "adjunto mi cv", "adjunto el cv", "adjunto curriculum",
     "job application", "vacancy", "position", "seeking",
+    "resume", "my resume", "cover letter", "work experience", "hire me",
     # Puestos específicos
     "chef", "cocinero", "cocinera", "hostess", "mozo", "moza",
     "camarero", "camarera", "mesero", "mesera",
@@ -144,7 +145,8 @@ def find_bio_for_candidate(name: str, since_date: str) -> str | None:
 
 
 def scrape_gmail(since_date: str, couple_keywords: list[str] = None,
-                 processed_ids: set[str] = None) -> list[dict]:
+                 processed_ids: set[str] = None,
+                 ignored_emails: list[str] = None) -> list[dict]:
     """
     Conecta a Gmail IMAP y retorna lista de mails con CVs no procesados.
     """
@@ -152,6 +154,7 @@ def scrape_gmail(since_date: str, couple_keywords: list[str] = None,
     app_pass = os.environ["GMAIL_APP_PASS"]
 
     processed_ids = processed_ids or set()
+    ignored_emails_set = {e.lower() for e in (ignored_emails or [])}
     results = []
     mail = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
     try:
@@ -194,8 +197,10 @@ def scrape_gmail(since_date: str, couple_keywords: list[str] = None,
             sender_name, sender_email = parseaddr(from_raw)
             sender_name = _decode_str(sender_name) or sender_email
 
-            # Ignorar mails enviados desde la propia cuenta
+            # Ignorar mails enviados desde la propia cuenta o desde emails bloqueados
             if sender_email.lower() == user.lower():
+                continue
+            if sender_email.lower() in ignored_emails_set:
                 continue
 
             body = _get_body_text(msg)

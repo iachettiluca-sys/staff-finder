@@ -47,7 +47,8 @@ Deno.serve(async (req: Request) => {
     return json({ error: "ANTHROPIC_API_KEY no configurada → Supabase Dashboard → Settings → Edge Functions → Secrets" })
   }
 
-  // 3. Obtener candidatos
+  // 3. Obtener candidatos (máx 50 para no superar timeout de 60s)
+  const MAX_CANDIDATES = 50
   let candidates: any[] = []
   try {
     const url =
@@ -55,7 +56,8 @@ Deno.serve(async (req: Request) => {
       `?select=id,name,position,pdf_text,bio,ai_score,pdf_url,category,couple_partner_id` +
       `&search_id=eq.${encodeURIComponent(search_id)}` +
       `&status=neq.spam` +
-      `&order=ai_score.desc.nullslast`
+      `&order=ai_score.desc.nullslast` +
+      `&limit=${MAX_CANDIDATES}`
 
     console.log(`[adhoc-search] Fetching candidates, search_id=${search_id}`)
     const resp = await fetch(url, {
@@ -134,8 +136,11 @@ CANDIDATO:
 ${content}`
 
   try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 12000) // 12s por candidato
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
+      signal: controller.signal,
       headers: {
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
@@ -160,6 +165,7 @@ ${content}`
       }),
     })
 
+    clearTimeout(timer)
     if (!resp.ok) {
       const txt = await resp.text()
       console.error(`[adhoc-search] Anthropic ${resp.status} for ${candidate.name}: ${txt.slice(0,200)}`)

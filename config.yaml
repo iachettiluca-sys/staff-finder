@@ -28,3 +28,8 @@ positions:
 
 # Criterio de pareja: un mail con 2 CVs adjuntos de personas distintas = pareja.
 # No se usan keywords del cuerpo del mail.
+
+# Emails bloqueados: nunca se importan como candidatos
+ignored_emails:
+  - fran@theriverhousegroup.com   # Francisco Mariani (interno RHG)
+  - rocapappo@gmail.com           # Sebastian Roca (no candidato)
