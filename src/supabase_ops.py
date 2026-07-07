@@ -70,10 +70,21 @@ def upload_pdf(search_id: str, filename: str, file_bytes: bytes) -> str:
     return res
 
 
+def _strip_nul(value):
+    """Postgres text/jsonb columns reject \\u0000; strip it before insert."""
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, list):
+        return [_strip_nul(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _strip_nul(v) for k, v in value.items()}
+    return value
+
+
 def create_candidate(data: dict) -> str:
     sb = get_client()
+    data = {k: _strip_nul(v) for k, v in data.items()}
     # Serialize lists to JSON for jsonb columns
-    data = dict(data)
     for col in ("ai_strengths", "ai_gaps"):
         if isinstance(data.get(col), list):
             data[col] = json.dumps(data[col], ensure_ascii=False)

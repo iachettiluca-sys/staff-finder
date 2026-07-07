@@ -163,24 +163,29 @@ def main() -> int:
             pdf_url = upload_pdf(search_id, f"{message_id}_{i}_{ad['att']['filename']}", ad["att"]["bytes"])
             pos_title = result["position"] if result["position"] != "unknown" else "Host"
 
-            candidate_id = create_candidate({
-                "search_id": search_id,
-                "name": result["full_name"],
-                "email": sender_email if i == 0 else "",
-                "bio": body if i == 0 else "",
-                "pdf_url": pdf_url,
-                "pdf_text": ad["cv_text"],
-                "gmail_message_id": message_id if i == 0 else f"{message_id}_p2",
-                "position": pos_title,
-                "category": "couple" if actually_couple else "solo",
-                "status": "nuevo",
-                "ai_score": result["score"],
-                "ai_summary": result["summary"],
-                "ai_strengths": result["strengths"],
-                "ai_gaps": result["gaps"],
-                "age": result["age"],
-                "nationality": result["nationality"],
-            })
+            try:
+                candidate_id = create_candidate({
+                    "search_id": search_id,
+                    "name": result["full_name"],
+                    "email": sender_email if i == 0 else "",
+                    "bio": body if i == 0 else "",
+                    "pdf_url": pdf_url,
+                    "pdf_text": ad["cv_text"],
+                    "gmail_message_id": message_id if i == 0 else f"{message_id}_p2",
+                    "position": pos_title,
+                    "category": "couple" if actually_couple else "solo",
+                    "status": "nuevo",
+                    "ai_score": result["score"],
+                    "ai_summary": result["summary"],
+                    "ai_strengths": result["strengths"],
+                    "ai_gaps": result["gaps"],
+                    "age": result["age"],
+                    "nationality": result["nationality"],
+                })
+            except Exception as e:
+                print(f"[scraper] Error insertando candidato {result['full_name']!r} ({message_id}): {e}")
+                continue
+
             candidate_ids.append(candidate_id)
             imported += 1
             print(f"[scraper] Candidato importado: {result['full_name']} — score: {result['score']}")
