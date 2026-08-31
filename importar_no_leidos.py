@@ -24,7 +24,7 @@ from supabase_ops import (
     ensure_positions, upload_pdf, create_candidate, link_couple,
 )
 
-ATTACHMENT_EXTS = (".pdf", ".doc", ".docx")
+ATTACHMENT_EXTS = (".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png")
 SINCE_DATE = datetime.date(2026, 6, 22)
 IMAP_TIMEOUT = 30
 
@@ -158,7 +158,16 @@ def process_email(num, mail, user, search_id, positions, processed_ids):
         atts_data = []
         for att in atts[:2]:
             try:
-                cv_text = extract_attachment_text(att["filename"], att["bytes"])
+                fn_lower = att["filename"].lower()
+                if fn_lower.endswith((".jpg", ".jpeg", ".png")):
+                    import pytesseract
+                    from PIL import Image
+                    import io as _io
+                    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+                    img = Image.open(_io.BytesIO(att["bytes"]))
+                    cv_text = pytesseract.image_to_string(img, lang="spa+eng", config="--psm 1").strip()
+                else:
+                    cv_text = extract_attachment_text(att["filename"], att["bytes"])
                 att_info = extract_name_and_position(cv_text, body if not atts_data else "", sender_name)
                 atts_data.append({"att": att, "cv_text": cv_text, "name": att_info["full_name"], "pos": att_info["position"]})
             except Exception as e:
@@ -241,13 +250,14 @@ def main():
     app_pass = os.environ["GMAIL_APP_PASS"]
 
     mail = connect_imap(user, app_pass)
-    since_str = SINCE_DATE.strftime("%d-%b-%Y")
-    _, nums = mail.search(None, f'SINCE "{since_str}"')
+
+    # Solo no leídos
+    _, nums = mail.search(None, "UNSEEN")
     ids = nums[0].split() if nums[0] else []
-    print(f"{len(ids)} mails desde {since_str} (leídos y no leídos)\n")
+    print(f"{len(ids)} mails no leídos en INBOX\n")
 
     imported = 0
-    imported_uids = []
+    to_mark_seen = []  # UIDs a marcar como leídos (importados + ya procesados que son CV)
 
     for i, num in enumerate(ids, 1):
         # Reconectar IMAP si cayó
@@ -265,20 +275,22 @@ def main():
         uid, candidate_ids = process_email(num, mail, user, search_id, positions, processed_ids)
 
         if candidate_ids is None:
-            print(f"  (ya procesado)")
+            # Ya estaba procesado — si tiene adjunto y es CV, marcar como leído igual
+            to_mark_seen.append(uid)
+            print(f"  (ya importado — marcando leído)")
             continue
         if candidate_ids:
             imported += len(candidate_ids)
-            imported_uids.append(uid)
+            to_mark_seen.append(uid)
             processed_ids.add(uid)
 
         time.sleep(0.2)
 
-    # Marcar como leídos
-    if imported_uids:
+    # Marcar como leídos todos los CVs (importados ahora + ya importados)
+    if to_mark_seen:
         try:
-            mail.uid("STORE", ",".join(imported_uids), "+FLAGS", "\\Seen")
-            print(f"\n{len(imported_uids)} mails marcados como leídos.")
+            mail.uid("STORE", ",".join(to_mark_seen), "+FLAGS", "\\Seen")
+            print(f"\n{len(to_mark_seen)} mails marcados como leídos.")
         except Exception as e:
             print(f"\nError marcando leídos: {e}")
 

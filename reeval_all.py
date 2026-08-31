@@ -63,12 +63,20 @@ for i, c in enumerate(candidates, 1):
     )
 
     import json
-    sb.table("candidates").update({
-        "ai_score": match["score"],
-        "ai_summary": match["summary"],
-        "ai_strengths": json.dumps(match["strengths"], ensure_ascii=False),
-        "ai_gaps": json.dumps(match["gaps"], ensure_ascii=False),
-    }).eq("id", c["id"]).execute()
+    for attempt in range(3):
+        try:
+            sb.table("candidates").update({
+                "ai_score": match["score"],
+                "ai_summary": match["summary"],
+                "ai_strengths": json.dumps(match["strengths"], ensure_ascii=False),
+                "ai_gaps": json.dumps(match["gaps"], ensure_ascii=False),
+            }).eq("id", c["id"]).execute()
+            break
+        except Exception as e:
+            if attempt == 2:
+                print(f"  [error] No se pudo guardar {name}: {e}")
+            else:
+                time.sleep(2)
 
     print(f"[{i}/{len(candidates)}] {name} ({pos_title}) -> score: {match['score']}")
     updated += 1

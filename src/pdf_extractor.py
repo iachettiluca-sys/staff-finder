@@ -7,11 +7,21 @@ Flujo para PDFs:
      (convierte cada página a imagen 300 DPI y lee con spa+eng)
 """
 from __future__ import annotations
-import io, os
+import io, os, shutil
 
-TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+WINDOWS_TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 OCR_LANGS      = "spa+eng"
 OCR_THRESHOLD  = 50   # chars mínimos para considerar que pdfplumber funcionó
+
+
+def _resolve_tesseract_cmd() -> str:
+    """TESSERACT_CMD env var > tesseract en PATH (Linux/CI) > ruta default de Windows."""
+    if os.environ.get("TESSERACT_CMD"):
+        return os.environ["TESSERACT_CMD"]
+    on_path = shutil.which("tesseract")
+    if on_path:
+        return on_path
+    return WINDOWS_TESSERACT_PATH
 
 
 def _ocr_pdf(file_bytes: bytes) -> str:
@@ -21,7 +31,7 @@ def _ocr_pdf(file_bytes: bytes) -> str:
         import pytesseract
         from PIL import Image
 
-        pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
+        pytesseract.pytesseract.tesseract_cmd = _resolve_tesseract_cmd()
 
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         pages_text = []
